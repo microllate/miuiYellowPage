@@ -2059,58 +2059,93 @@ public class HookEntry implements IXposedHookLoadPackage {
 
 
 
-    private static void hookYellowPageFileCopy(ClassLoader cl) {
+    private static void hookYellowPageFileCommit(ClassLoader cl) {
         try {
-            XposedHelpers.findAndHookMethod(
-                    "e1.c", cl, "b",
-                    java.io.InputStream.class, java.io.File.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
+            Class<?> copyClass = Class.forName("e1.c", false, cl);
+            for (Method method : copyClass.getDeclaredMethods()) {
+                Class<?>[] p = method.getParameterTypes();
+                if (!"a".equals(method.getName())
+                        || !Modifier.isStatic(method.getModifiers())
+                        || method.getReturnType() != Boolean.TYPE
+                        || p.length != 2
+                        || p[0] != java.io.File.class
+                        || p[1] != java.io.File.class) {
+                    continue;
+                }
+
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        try {
+                            if (param.args == null || param.args.length != 2
+                                    || !(param.args[0] instanceof java.io.File)
+                                    || !(param.args[1] instanceof java.io.File)) {
+                                return;
+                            }
+
+                            java.io.File source = (java.io.File) param.args[0];
+                            java.io.File target = (java.io.File) param.args[1];
+                            String targetPath = target.getAbsolutePath();
+
+                            if (!targetPath.endsWith("yellow_pages.dat")
+                                    || !targetPath.contains("com.miui.yellowpage")) {
+                                return;
+                            }
+
+                            if (!source.exists() || source.length() <= 0) {
+                                log("YellowPage direct commit skipped: source missing/empty");
+                                return;
+                            }
+
+                            java.io.File parent = target.getParentFile();
+                            if (parent != null && !parent.exists() && !parent.mkdirs()) {
+                                throw new java.io.IOException("cannot create target parent");
+                            }
+
+                            java.io.FileInputStream input =
+                                    new java.io.FileInputStream(source);
+                            java.io.FileOutputStream output =
+                                    new java.io.FileOutputStream(target, false);
+
+                            byte[] buffer = new byte[8192];
+                            int n;
+                            long total = 0;
                             try {
-                                if (param.args == null || param.args.length != 2
-                                        || !(param.args[0] instanceof java.io.InputStream)
-                                        || !(param.args[1] instanceof java.io.File)) {
-                                    return;
-                                }
-
-                                java.io.InputStream input = (java.io.InputStream) param.args[0];
-                                java.io.File target = (java.io.File) param.args[1];
-                                String path = target.getAbsolutePath();
-
-                                if (!path.endsWith("yellow_pages.dat")
-                                        || !path.contains("com.miui.yellowpage")) {
-                                    return;
-                                }
-
-                                // The EEA build fails here because the original implementation
-                                // requires File.delete() to succeed before opening the output.
-                                // FileOutputStream can truncate an existing writable file
-                                // directly, so skip the delete step and preserve the rest of
-                                // the original copy semantics.
-                                java.io.FileOutputStream output =
-                                        new java.io.FileOutputStream(target, false);
-                                byte[] buffer = new byte[4096];
-                                int n;
                                 while ((n = input.read(buffer)) != -1) {
                                     output.write(buffer, 0, n);
+                                    total += n;
                                 }
                                 output.flush();
                                 try {
                                     output.getFD().sync();
                                 } catch (Throwable ignored) {
                                 }
-                                output.close();
-                                param.setResult(true);
-                            } catch (Throwable e) {
-                                // Let the original implementation handle unexpected targets
-                                // or I/O failures so this hook does not mask other behavior.
+                            } finally {
+                                try {
+                                    output.close();
+                                } finally {
+                                    input.close();
+                                }
                             }
+
+                            param.setResult(true);
+                            log("YellowPage direct commit: " + total
+                                    + " bytes -> " + targetPath);
+                        } catch (Throwable e) {
+                            log("YellowPage direct commit failed: "
+                                    + e.getClass().getSimpleName() + ": "
+                                    + String.valueOf(e.getMessage()));
                         }
-                    });
-            log("hooked e1.c.b(InputStream,File): skip delete for YellowPage data");
+                    }
+                });
+
+                log("hooked e1.c.a(File,File): direct YellowPage commit");
+                return;
+            }
+            log("e1.c.a(File,File) not found");
         } catch (Throwable e) {
-            log("YellowPage file copy hook failed: " + e.getClass().getSimpleName());
+            log("YellowPage direct commit hook failed: "
+                    + e.getClass().getSimpleName());
         }
     }
 
@@ -2150,7 +2185,7 @@ public class HookEntry implements IXposedHookLoadPackage {
             // The CDN payload is valid, but EEA may prevent replacing the existing
             // yellow_pages.dat. Keep the downloaded .tmp file and transparently
             // redirect YellowPage readers to it instead of requiring a filesystem move.
-            hookYellowPageFileCopy(cl);
+            hookYellowPageFileCommit(cl);
             hookYellowPageDataFileReads(cl);
             // o0.d.p wraps the underlying transport exception as a generic
             // "failed to download file". Hook URL.openConnection and the
