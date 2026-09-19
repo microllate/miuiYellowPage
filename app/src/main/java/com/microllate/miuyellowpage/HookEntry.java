@@ -2058,6 +2058,62 @@ public class HookEntry implements IXposedHookLoadPackage {
     }
 
 
+
+    private static void hookYellowPageFileCopy(ClassLoader cl) {
+        try {
+            XposedHelpers.findAndHookMethod(
+                    "e1.c", cl, "b",
+                    java.io.InputStream.class, java.io.File.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            try {
+                                if (param.args == null || param.args.length != 2
+                                        || !(param.args[0] instanceof java.io.InputStream)
+                                        || !(param.args[1] instanceof java.io.File)) {
+                                    return;
+                                }
+
+                                java.io.InputStream input = (java.io.InputStream) param.args[0];
+                                java.io.File target = (java.io.File) param.args[1];
+                                String path = target.getAbsolutePath();
+
+                                if (!path.endsWith("yellow_pages.dat")
+                                        || !path.contains("com.miui.yellowpage")) {
+                                    return;
+                                }
+
+                                // The EEA build fails here because the original implementation
+                                // requires File.delete() to succeed before opening the output.
+                                // FileOutputStream can truncate an existing writable file
+                                // directly, so skip the delete step and preserve the rest of
+                                // the original copy semantics.
+                                java.io.FileOutputStream output =
+                                        new java.io.FileOutputStream(target, false);
+                                byte[] buffer = new byte[4096];
+                                int n;
+                                while ((n = input.read(buffer)) != -1) {
+                                    output.write(buffer, 0, n);
+                                }
+                                output.flush();
+                                try {
+                                    output.getFD().sync();
+                                } catch (Throwable ignored) {
+                                }
+                                output.close();
+                                param.setResult(true);
+                            } catch (Throwable e) {
+                                // Let the original implementation handle unexpected targets
+                                // or I/O failures so this hook does not mask other behavior.
+                            }
+                        }
+                    });
+            log("hooked e1.c.b(InputStream,File): skip delete for YellowPage data");
+        } catch (Throwable e) {
+            log("YellowPage file copy hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
     private static void hookYellowPageDownload(ClassLoader cl) {
         try {
             Class<?> d = Class.forName("o0.d", false, cl);
@@ -2094,6 +2150,7 @@ public class HookEntry implements IXposedHookLoadPackage {
             // The CDN payload is valid, but EEA may prevent replacing the existing
             // yellow_pages.dat. Keep the downloaded .tmp file and transparently
             // redirect YellowPage readers to it instead of requiring a filesystem move.
+            hookYellowPageFileCopy(cl);
             hookYellowPageDataFileReads(cl);
             // o0.d.p wraps the underlying transport exception as a generic
             // "failed to download file". Hook URL.openConnection and the
