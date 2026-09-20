@@ -2952,6 +2952,31 @@ hookMeteredNetworkGuard(cl);
         }
     }
 
+    private static void hookYellowPageHConstructor(ClassLoader cl) {
+        try {
+            Class<?> hClass = Class.forName("com.miui.yellowpage.utils.H", false, cl);
+            Constructor<?> ctor = hClass.getDeclaredConstructor(Context.class, String.class);
+            XposedBridge.hookMethod(ctor, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    String url = param.args != null && param.args.length > 1
+                            ? String.valueOf(param.args[1]) : "";
+                    if (url.contains("global.api.huangye.miui.com")) {
+                        param.args[1] = url.replace("global.api.huangye.miui.com",
+                                "api.huangye.miui.com");
+                        log("H CONSTRUCTOR URL: global -> CN");
+                    } else {
+                        log("H CONSTRUCTOR URL: " + url);
+                    }
+                }
+            });
+            log("hooked H(Context,String) URL");
+        } catch (Throwable e) {
+            log("H constructor hook failed: " + e.getClass().getSimpleName()
+                    + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
     private static void hookYellowPageWStatus(ClassLoader cl) {
         try {
             Class<?> hClass = Class.forName("com.miui.yellowpage.utils.H", false, cl);
@@ -3015,6 +3040,7 @@ hookMeteredNetworkGuard(cl);
             log("YELLOWPAGE LOAD ENTER classLoader=" + String.valueOf(cl));
             hookYellowPageRequestMode(cl);
             hookYellowPageWStatus(cl);
+            hookYellowPageHConstructor(cl);
             hookYellowPageDaemon(cl);
             hookYellowPageActualRequestBuilder(cl);
             hookYellowPageRegionParam(cl);
