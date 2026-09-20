@@ -57,33 +57,21 @@ public class HookEntry implements IXposedHookLoadPackage {
 
         private static void hookYellowPageSyncGate(ClassLoader cl) {
         try {
-            Class<?> feature = Class.forName("c0.b", false, cl);
-            Class<?> enumClass = Class.forName("c0.a", false, cl);
+            Class<?> feature = Class.forName("d0.b", false, cl);
+            Class<?> enumClass = Class.forName("d0.a", false, cl);
             Object sync = Enum.valueOf((Class<Enum>) enumClass.asSubclass(Enum.class), "YELLOWPAGE_SYNC");
-            for (Method method : feature.getDeclaredMethods()) {
-                Class<?>[] p = method.getParameterTypes();
-                if (!Modifier.isStatic(method.getModifiers())
-                        || method.getReturnType() != Boolean.TYPE
-                        || p.length != 2
-                        || p[0] != Context.class
-                        || p[1] != enumClass) {
-                    continue;
-                }
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        if (param.args[1] == sync) {
-                            log("YELLOWPAGE_SYNC: original=" + param.getResult() + " -> true");
-                            param.setResult(true);
-                        }
+            Method method = feature.getDeclaredMethod("e", Context.class, enumClass);
+            XposedBridge.hookMethod(method, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (sync.equals(param.args[1]) && Boolean.FALSE.equals(param.getResult())) {
+                        param.setResult(true);
+                        log("YELLOWPAGE_SYNC: d0.b.e false -> true");
                     }
-                });
-                log("hooked YELLOWPAGE_SYNC feature gate");
-                return;
-            }
-            log("YELLOWPAGE_SYNC feature gate method not found");
+                }
+            });
+            log("hooked YELLOWPAGE_SYNC: d0.b.e(Context,d0.a)");
         } catch (Throwable e) {
-            log("YELLOWPAGE_SYNC hook failed: " + e.getClass().getSimpleName());
+            log("YELLOWPAGE_SYNC hook failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
@@ -118,207 +106,43 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void hookYellowPageActionZero(ClassLoader cl) {
         try {
-            Class<?> pull = Class.forName("o0.g", false, cl);
-            for (Method method : pull.getDeclaredMethods()) {
-                Class<?>[] p = method.getParameterTypes();
-                if (!"t".equals(method.getName())
-                        || method.getReturnType() != Boolean.TYPE
-                        || p.length != 2
-                        || p[0] != Context.class
-                        || p[1] != String.class) {
-                    continue;
-                }
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        try {
-                            String body = (String) param.args[1];
-                            org.json.JSONObject root = new org.json.JSONObject(body);
-                            if (root.optInt("action", -1) == 0
-                                    && root.optJSONObject("info") != null) {
-                                root.put("action", 1);
-                                param.args[1] = root.toString();
-                            }
-                        } catch (Throwable ignored) {
+            Class<?> pull = Class.forName("p0.g", false, cl);
+            Method method = pull.getDeclaredMethod("r", Context.class, String.class);
+            XposedBridge.hookMethod(method, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    try {
+                        if (param.args == null || param.args.length != 2
+                                || !(param.args[1] instanceof String)) return;
+                        org.json.JSONObject root = new org.json.JSONObject((String) param.args[1]);
+                        if (root.optInt("action", -1) == 0 && root.optJSONObject("info") != null) {
+                            root.put("action", 1);
+                            param.args[1] = root.toString();
+                            log("CN SYNC: p0.g.r action=0 -> action=1");
                         }
-                    }
-                });
-                log("CN SYNC: o0.g.t action=0 -> action=1");
-                return;
-            }
-            log("CN SYNC: o0.g.t(Context,String) not found");
+                    } catch (Throwable ignored) {}
+                }
+            });
+            log("hooked CN SYNC action handler: p0.g.r(Context,String)");
         } catch (Throwable e) {
-            log("CN SYNC action hook failed: " + e.getClass().getSimpleName());
+            log("CN SYNC action hook failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
     private static void hookYellowPagePullTask(ClassLoader cl, Context context) {
         try {
-            Class<?> cls = Class.forName("o0.g", false, cl);
-            for (Method method : cls.getDeclaredMethods()) {
-                Class<?>[] p = method.getParameterTypes();
-                if (!"y".equals(method.getName())
-                        || method.getReturnType() != Boolean.TYPE
-                        || p.length != 1
-                        || p[0] != Context.class) continue;
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override protected void afterHookedMethod(MethodHookParam param) {
-                        if (!param.hasThrowable() && Boolean.FALSE.equals(param.getResult())) {
-                            param.setResult(true);
-                        }
+            Class<?> cls = Class.forName("p0.g", false, cl);
+            Method method = cls.getDeclaredMethod("v", Context.class);
+            XposedBridge.hookMethod(method, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (!param.hasThrowable() && Boolean.FALSE.equals(param.getResult())) {
+                        param.setResult(true);
+                        log("PullTask gate: p0.g.v(Context) false -> true");
                     }
-                });
-                log("PullTask gate hooked: o0.g.y(Context)");
-                return;
-            }
-            log("PullTask gate o0.g.y(Context) not found");
+                }
+            });
+            log("PullTask gate hooked: p0.g.v(Context)");
         } catch (Throwable e) {
-            log("PullTask gate hook failed: " + e.getClass().getSimpleName());
-        }
-    }
-
-
-    private static void hookJobDispatcher(ClassLoader cl, Context context) {
-        try {
-            Class<?> dispatcher = null;
-
-            // JADX reports this class as a0.C0166b, but some EEA builds can
-            // expose the obfuscated package/class through a different dex
-            // loading path. Try the exact name first, then locate the class
-            // by the unique dispatcher method signatures.
-            try {
-                dispatcher = Class.forName("a0.C0166b", false, cl);
-            } catch (Throwable ignored) {
-                // Fall through to dex scan.
-            }
-
-            if (dispatcher == null) {
-                java.util.ArrayList<String> paths = new java.util.ArrayList<>();
-                if (context != null) {
-                    paths.add(context.getApplicationInfo().sourceDir);
-                    String[] splits = context.getApplicationInfo().splitSourceDirs;
-                    if (splits != null) {
-                        for (String split : splits) {
-                            if (split != null && !paths.contains(split)) paths.add(split);
-                        }
-                    }
-                }
-
-                for (String apkPath : paths) {
-                    DexFile dex = new DexFile(apkPath);
-                    try {
-                        Enumeration<String> entries = dex.entries();
-                        while (entries.hasMoreElements() && dispatcher == null) {
-                            String name = entries.nextElement();
-                            if (name.indexOf('.') < 0) continue;
-                            try {
-                                Class<?> candidate = Class.forName(name, false, cl);
-                                boolean hasA = false;
-                                boolean hasE = false;
-                                for (Method m : candidate.getDeclaredMethods()) {
-                                    Class<?>[] p = m.getParameterTypes();
-                                    if ("a".equals(m.getName())
-                                            && Modifier.isStatic(m.getModifiers())
-                                            && m.getReturnType() == Boolean.TYPE
-                                            && p.length == 2
-                                            && p[0] == Context.class
-                                            && p[1] == Integer.TYPE) {
-                                        hasA = true;
-                                    }
-                                    if ("e".equals(m.getName())
-                                            && Modifier.isStatic(m.getModifiers())
-                                            && m.getReturnType() == Void.TYPE
-                                            && p.length == 3
-                                            && p[0] == Context.class
-                                            && p[1] == Integer.TYPE
-                                            && p[2] == Boolean.TYPE) {
-                                        hasE = true;
-                                    }
-                                }
-                                if (hasA && hasE) {
-                                    dispatcher = candidate;
-                                    log("JobDispatcher class found by method shape: "
-                                            + candidate.getName());
-                                }
-                            } catch (Throwable ignored) {
-                            }
-                        }
-                    } finally {
-                        dex.close();
-                    }
-                }
-            }
-
-            if (dispatcher == null) {
-                log("JobDispatcher class not found");
-                return;
-            }
-
-            // EEA disables pull_task_job through i.f(Context). Restore only
-            // the Yellow Page pull job gate; leave the other jobs untouched.
-            for (Method method : dispatcher.getDeclaredMethods()) {
-                if (!"a".equals(method.getName())
-                        || !Modifier.isStatic(method.getModifiers())
-                        || method.getReturnType() != Boolean.TYPE) {
-                    continue;
-                }
-
-                Class<?>[] p = method.getParameterTypes();
-                if (p.length != 2 || p[0] != Context.class || p[1] != Integer.TYPE) {
-                    continue;
-                }
-
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        int jobId = (Integer) param.args[1];
-                        if (jobId == 0) {
-                            log("JobDispatcher.canScheduleJob: pull_task_job -> true");
-                            param.setResult(true);
-                        }
-                    }
-                });
-                log("hooked JobDispatcher.canScheduleJob(Context,int)");
-            }
-
-            // Log the actual scheduling call so we can verify that JobScheduler
-            // receives pull_task_job after the gate is restored.
-            for (Method method : dispatcher.getDeclaredMethods()) {
-                if (!"e".equals(method.getName())
-                        || !Modifier.isStatic(method.getModifiers())
-                        || method.getReturnType() != Void.TYPE) {
-                    continue;
-                }
-
-                Class<?>[] p = method.getParameterTypes();
-                if (p.length != 3
-                        || p[0] != Context.class
-                        || p[1] != Integer.TYPE
-                        || p[2] != Boolean.TYPE) {
-                    continue;
-                }
-
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        int jobId = (Integer) param.args[1];
-                        if (jobId == 0) {
-                            log("JobDispatcher.scheduleJob ENTER: pull_task_job");
-                        }
-                    }
-
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        int jobId = (Integer) param.args[1];
-                        if (jobId == 0) {
-                            log("JobDispatcher.scheduleJob EXIT: pull_task_job");
-                        }
-                    }
-                });
-                log("hooked JobDispatcher.scheduleJob(Context,int,boolean)");
-            }
-        } catch (Throwable e) {
-            log("JobDispatcher hook failed: " + e.getClass().getSimpleName());
+            log("PullTask gate hook failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
@@ -377,7 +201,7 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void hookPullTaskExecution(ClassLoader cl) {
         try {
-            Class<?> cls = Class.forName("o0.g", false, cl);
+            Class<?> cls = Class.forName("p0.g", false, cl);
             log("PullTask class found: " + cls.getName());
 
             for (Method method : cls.getDeclaredMethods()) {
@@ -387,7 +211,7 @@ public class HookEntry implements IXposedHookLoadPackage {
                 XposedBridge.hookMethod(method, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
-                        log("PullTask o0.g ENTER: " + methodName
+                        log("PullTask p0.g ENTER: " + methodName
                                 + " args=" + (param.args == null ? 0 : param.args.length));
                     }
 
@@ -395,15 +219,15 @@ public class HookEntry implements IXposedHookLoadPackage {
                     protected void afterHookedMethod(MethodHookParam param) {
                         if (param.hasThrowable()) {
                             Throwable t = param.getThrowable();
-                            log("PullTask o0.g THROW: " + methodName
+                            log("PullTask p0.g THROW: " + methodName
                                     + " " + t.getClass().getName() + ": " + t.getMessage());
                         } else {
                             Object result = param.getResult();
                             String text = String.valueOf(result);
                             if (text.length() > 300) text = text.substring(0, 300);
-                            log("PullTask o0.g RESULT: " + methodName + "=" + text);
+                            log("PullTask p0.g RESULT: " + methodName + "=" + text);
 
-                            // o0.g.j(...) returns H. The actual network/data work
+                            // p0.g.j(...) returns H. The actual network/data work
                             // appears to continue on that returned object, so hook
                             // its concrete methods when j() returns an object.
                             if ("j".equals(methodName) && result != null) {
@@ -413,7 +237,7 @@ public class HookEntry implements IXposedHookLoadPackage {
                     }
                 });
 
-                log("hooked PullTask o0.g method: " + methodName
+                log("hooked PullTask p0.g method: " + methodName
                         + "(" + method.getParameterTypes().length + " args) -> "
                         + returnType.getSimpleName());
             }
@@ -974,28 +798,20 @@ public class HookEntry implements IXposedHookLoadPackage {
 
         // Trace Q.a(Context), the second gate used by H.u() when k == 0.
         try {
-            Class<?> q = Class.forName("Q.a", false, cl);
-            Method qMethod = q.getDeclaredMethod("a", Context.class);
-            if (!Modifier.isStatic(qMethod.getModifiers()) || qMethod.getReturnType() != Boolean.TYPE) {
-                log("NETWORK GATE Q.a signature mismatch");
-            } else {
-                XposedBridge.hookMethod(qMethod, new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        if (param.hasThrowable()) {
-                            Throwable t = param.getThrowable();
-                            log("NETWORK GATE: Q.a(Context) THROW: " + t.getClass().getName()
-                                    + ": " + String.valueOf(t.getMessage()));
-                        } else {
-                            log("NETWORK GATE: Q.a(Context) -> " + String.valueOf(param.getResult()));
-                        }
+            Class<?> gate = Class.forName("R.a", false, cl);
+            Method method = gate.getDeclaredMethod("a", Context.class);
+            XposedBridge.hookMethod(method, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (!param.hasThrowable() && Boolean.FALSE.equals(param.getResult())
+                            && isYellowPageContext(param.args)) {
+                        param.setResult(true);
+                        log("NETWORK GATE BYPASS: R.a.a false -> true");
                     }
-                });
-                log("hooked NETWORK GATE: Q.a(Context)");
-            }
+                }
+            });
+            log("hooked NETWORK GATE: R.a.a(Context)");
         } catch (Throwable e) {
-            log("NETWORK GATE Q.a hook failed: " + e.getClass().getSimpleName()
-                    + ": " + String.valueOf(e.getMessage()));
+            log("NETWORK GATE R.a hook failed: " + e.getClass().getSimpleName());
         }
 
         try {
@@ -1521,7 +1337,7 @@ public class HookEntry implements IXposedHookLoadPackage {
 
                         /*
                          * The last confirmed failure is x.j(...)->false.
-                         * x.i() delegates to x.j(), and o0.d.p() aborts when the
+                         * x.i() delegates to x.j(), and p0.d.n() aborts when the
                          * resulting boolean is false.  At this point the server has
                          * already returned valid patch metadata and the CDN URL is
                          * known, so reproduce the small file-copy operation here.
@@ -1652,7 +1468,7 @@ public class HookEntry implements IXposedHookLoadPackage {
 
                         if ("i".equals(name) && param.getResult() == null) {
                             // x.i() is the final stream acquisition point used by
-                            // o0.d.p -> s0.t. If the obfuscated helper returns null
+                            // p0.d.n -> s0.t. If the obfuscated helper returns null
                             // despite a live HTTP 200/content-length response, expose
                             // the exact j0.d()/getInputStream path without changing it.
                             try {
@@ -2040,219 +1856,57 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void hookYellowPageFileCommit(ClassLoader cl) {
         try {
-            Class<?> copyClass = Class.forName("e1.c", false, cl);
-            for (Method method : copyClass.getDeclaredMethods()) {
-                Class<?>[] p = method.getParameterTypes();
-                if (!"a".equals(method.getName())
-                        || !Modifier.isStatic(method.getModifiers())
-                        || method.getReturnType() != Boolean.TYPE
-                        || p.length != 2
-                        || p[0] != java.io.File.class
-                        || p[1] != java.io.File.class) {
-                    continue;
+            Class<?> copyClass = Class.forName("f1.c", false, cl);
+            Method method = copyClass.getDeclaredMethod("a", java.io.File.class, java.io.File.class);
+            XposedBridge.hookMethod(method, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    if (param.args == null || param.args.length != 2
+                            || !(param.args[0] instanceof java.io.File)
+                            || !(param.args[1] instanceof java.io.File)) return;
+                    java.io.File source = (java.io.File) param.args[0];
+                    java.io.File target = (java.io.File) param.args[1];
+                    if (!target.getAbsolutePath().endsWith("yellow_pages.dat")) return;
+                    log("YellowPage file commit ENTER: " + source.getAbsolutePath()
+                            + " -> " + target.getAbsolutePath() + " bytes=" + source.length());
                 }
-
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        try {
-                            if (param.args == null || param.args.length != 2
-                                    || !(param.args[0] instanceof java.io.File)
-                                    || !(param.args[1] instanceof java.io.File)) {
-                                return;
-                            }
-
-                            java.io.File source = (java.io.File) param.args[0];
-                            java.io.File target = (java.io.File) param.args[1];
-                            String targetPath = target.getAbsolutePath();
-
-                            if (!targetPath.endsWith("yellow_pages.dat")
-                                    || !targetPath.contains("com.miui.yellowpage")) {
-                                return;
-                            }
-
-                            if (!source.exists() || source.length() <= 0) {
-                                log("YellowPage direct commit skipped: source missing/empty");
-                                return;
-                            }
-
-                            java.io.File parent = target.getParentFile();
-                            if (parent != null && !parent.exists() && !parent.mkdirs()) {
-                                throw new java.io.IOException("cannot create target parent");
-                            }
-
-                            java.io.FileInputStream input =
-                                    new java.io.FileInputStream(source);
-                            java.io.FileOutputStream output =
-                                    new java.io.FileOutputStream(target, false);
-
-                            byte[] buffer = new byte[8192];
-                            int n;
-                            long total = 0;
-                            try {
-                                while ((n = input.read(buffer)) != -1) {
-                                    output.write(buffer, 0, n);
-                                    total += n;
-                                }
-                                output.flush();
-                                try {
-                                    output.getFD().sync();
-                                } catch (Throwable ignored) {
-                                }
-                            } finally {
-                                try {
-                                    output.close();
-                                } finally {
-                                    input.close();
-                                }
-                            }
-
-                            param.setResult(true);
-                            log("YellowPage direct commit: " + total
-                                    + " bytes -> " + targetPath);
-                        } catch (Throwable e) {
-                            log("YellowPage direct commit failed: "
-                                    + e.getClass().getSimpleName() + ": "
-                                    + String.valueOf(e.getMessage()));
-                        }
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        log("YellowPage file commit THROW: "
+                                + param.getThrowable().getClass().getSimpleName() + ": "
+                                + String.valueOf(param.getThrowable().getMessage()));
+                    } else {
+                        log("YellowPage file commit RESULT: " + String.valueOf(param.getResult()));
                     }
-                });
-
-                log("hooked e1.c.a(File,File): direct YellowPage commit");
-                return;
-            }
-            log("e1.c.a(File,File) not found");
+                }
+            });
+            log("hooked YellowPage file commit: f1.c.a(File,File)");
         } catch (Throwable e) {
-            log("YellowPage direct commit hook failed: "
-                    + e.getClass().getSimpleName());
+            log("YellowPage direct commit hook failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
     private static void hookYellowPageDownload(ClassLoader cl) {
         try {
-            Class<?> d = Class.forName("o0.d", false, cl);
-            int found = 0;
-            for (Method method : d.getDeclaredMethods()) {
-                if (!"p".equals(method.getName())) continue;
-                final Method target = method;
-                XposedBridge.hookMethod(target, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        log("DOWNLOAD ENTER: o0.d.p args=" + formatHookArgs(param.args));
-                    }
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        if (param.hasThrowable()) {
-                            Throwable t = param.getThrowable();
-                            log("DOWNLOAD THROW: o0.d.p " + t.getClass().getName()
-                                    + ": " + String.valueOf(t.getMessage()));
-                        } else {
-                            log("DOWNLOAD RESULT: o0.d.p -> " + String.valueOf(param.getResult()));
-                        }
-                    }
-                });
-                found++;
-            }
-            log("DOWNLOAD o0.d.p hooks installed=" + found);
-            // Let the original YellowPage reader consume the real yellow_pages.dat.
-            hookYellowPageFileCommit(cl);
-            // o0.d.p wraps the underlying transport exception as a generic
-            // "failed to download file". Hook URL.openConnection and the
-            // connection surface to expose the real CDN failure.
-            Class<?> url = Class.forName("java.net.URL", false, ClassLoader.getSystemClassLoader());
-            for (Method method : url.getDeclaredMethods()) {
-                if (!"openConnection".equals(method.getName())) continue;
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        try {
-                            Object u = param.thisObject;
-                            String text = String.valueOf(u);
-                            if (text.contains("yp_spam") || text.contains("yellowpage")) {
-                                log("DOWNLOAD URL.OPEN: " + text);
-                            }
-                        } catch (Throwable ignored) {}
-                    }
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        if (param.hasThrowable()) {
-                            log("DOWNLOAD URL.OPEN THROW: "
-                                    + param.getThrowable().getClass().getName() + ": "
-                                    + String.valueOf(param.getThrowable().getMessage()));
-                            return;
-                        }
-                        Object r = param.getResult();
-                        if (r != null) {
-                            String text = String.valueOf(r);
-                            if (text.contains("yp_spam") || text.contains("yellowpage")) {
-                                log("DOWNLOAD URL.OPEN RESULT: " + r.getClass().getName());
-                            }
-                        }
-                    }
-                });
-            }
-            log("DOWNLOAD java.net.URL.openConnection hooks installed");
-
-            Class<?> uc = Class.forName("java.net.URLConnection", false,
-                    ClassLoader.getSystemClassLoader());
-            String[] names = new String[]{"connect", "getInputStream", "getResponseCode",
-                    "getContentLength", "getContentLengthLong"};
-            int connectionHooks = 0;
-            Class<?> current = uc;
-            while (current != null) {
-                for (Method method : current.getDeclaredMethods()) {
-                    boolean match = false;
-                    for (String name : names) {
-                        if (name.equals(method.getName())) {
-                            match = true;
-                            break;
-                        }
-                    }
-                    if (!match) continue;
-                    if (Modifier.isAbstract(method.getModifiers())) continue;
-                    final Method target = method;
-                    XposedBridge.hookMethod(target, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            try {
-                                String u = String.valueOf(param.thisObject);
-                                if (u.contains("yp_spam") || u.contains("yellowpage")) {
-                                    log("DOWNLOAD HTTP ENTER: " + target.getName()
-                                            + " class=" + param.thisObject.getClass().getName()
-                                            + " url=" + u);
-                                }
-                            } catch (Throwable ignored) {}
-                        }
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            try {
-                                String u = String.valueOf(param.thisObject);
-                                if (!(u.contains("yp_spam") || u.contains("yellowpage"))) return;
-                                if (param.hasThrowable()) {
-                                    Throwable t = param.getThrowable();
-                                    log("DOWNLOAD HTTP THROW: " + target.getName() + " "
-                                            + t.getClass().getName() + ": "
-                                            + String.valueOf(t.getMessage()));
-                                    Throwable cause = t.getCause();
-                                    if (cause != null) {
-                                        log("DOWNLOAD HTTP CAUSE: " + cause.getClass().getName()
-                                                + ": " + String.valueOf(cause.getMessage()));
-                                    }
-                                } else {
-                                    log("DOWNLOAD HTTP RESULT: " + target.getName()
-                                            + " -> " + String.valueOf(param.getResult()));
-                                }
-                            } catch (Throwable ignored) {}
-                        }
-                    });
-                    connectionHooks++;
+            Class<?> pullBase = Class.forName("p0.d", false, cl);
+            Method download = pullBase.getDeclaredMethod("n", Context.class, org.json.JSONObject.class);
+            XposedBridge.hookMethod(download, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    log("DOWNLOAD ENTER: p0.d.n(Context,JSONObject)");
                 }
-                current = current.getSuperclass();
-            }
-            log("DOWNLOAD URLConnection hooks installed=" + connectionHooks);
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        log("DOWNLOAD THROW: p0.d.n "
+                                + param.getThrowable().getClass().getName() + ": "
+                                + String.valueOf(param.getThrowable().getMessage()));
+                    } else {
+                        log("DOWNLOAD RESULT: p0.d.n -> success");
+                    }
+                }
+            });
+            log("DOWNLOAD p0.d.n hook installed");
+            hookYellowPageFileCommit(cl);
         } catch (Throwable e) {
-            log("DOWNLOAD hook failed: " + e.getClass().getName()
-                    + ": " + String.valueOf(e.getMessage()));
+            log("DOWNLOAD hook failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
@@ -2373,95 +2027,42 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void hookYellowPageActualRequestBuilder(ClassLoader cl) {
         try {
-            Class<?> builder = Class.forName("o0.b", false, cl);
-            int found = 0;
-            for (Method method : builder.getDeclaredMethods()) {
-                if (!"j".equals(method.getName())) {
-                    continue;
+            Class<?> builder = Class.forName("k0.c", false, cl);
+            Method q = builder.getDeclaredMethod("q");
+            XposedBridge.hookMethod(q, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    log("ACTUAL REQUEST BUILDER: k0.c.q() ENTER");
                 }
-                final Method target = method;
-                XposedBridge.hookMethod(target, new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        if (param.hasThrowable() || param.getResult() == null) {
-                            return;
-                        }
-                        Object result = param.getResult();
-                        if (!"com.miui.yellowpage.utils.H".equals(result.getClass().getName())) {
-                            return;
-                        }
-                        try {
-                            Class<?> j0 = Class.forName("com.miui.yellowpage.utils.j0", false, cl);
-                            java.lang.reflect.Field k = j0.getDeclaredField("k");
-                            k.setAccessible(true);
-                            Object old = k.get(result);
-                            log("ACTUAL REQUEST BUILDER: o0.b.j -> H k=" + String.valueOf(old));
-                            if (Integer.valueOf(-1).equals(old)) {
-                                Method setter = j0.getDeclaredMethod("j", Integer.TYPE);
-                                setter.setAccessible(true);
-                                setter.invoke(result, 1);
-                                log("ACTUAL REQUEST BUILDER: forced H.k -1 -> 1");
-                            }
-                        } catch (Throwable e) {
-                            log("ACTUAL REQUEST BUILDER force failed: "
-                                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
-                        }
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        log("ACTUAL REQUEST BUILDER: k0.c.q() THROW "
+                                + param.getThrowable().getClass().getSimpleName());
                     }
-                });
-                found++;
-                log("hooked ACTUAL REQUEST BUILDER: o0.b." + target.getName()
-                        + "(" + target.getParameterTypes().length + " args)");
-            }
-            if (found == 0) {
-                log("ACTUAL REQUEST BUILDER: o0.b.j not found");
-            }
+                }
+            });
+            log("hooked ACTUAL REQUEST BUILDER: k0.c.q()");
         } catch (Throwable e) {
             log("ACTUAL REQUEST BUILDER hook failed: " + e.getClass().getName()
-                    + ": " + String.valueOf(e.getMessage()));
+                    + ": " + e.getMessage());
         }
     }
 
     private static void hookYellowPageRequestMode(ClassLoader cl) {
         try {
-            Class<?> taskBase = Class.forName("o0.a", false, cl);
-            Method factory = taskBase.getDeclaredMethod("j", Context.class);
-            XposedBridge.hookMethod(factory, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (param.hasThrowable() || param.getResult() == null) {
-                        return;
-                    }
-                    Object result = param.getResult();
-                    if (!"com.miui.yellowpage.utils.H".equals(result.getClass().getName())
-                            && !isInstanceOf(result, "com.miui.yellowpage.utils.H", cl)) {
-                        return;
-                    }
-
-                    try {
-                        Class<?> j0 = Class.forName(
-                                "com.miui.yellowpage.utils.j0", false, cl);
-                        java.lang.reflect.Field k = j0.getDeclaredField("k");
-                        k.setAccessible(true);
-                        Object old = k.get(result);
-                        log("REQUEST MODE: o0.a.j(Context) returned H k=" + String.valueOf(old));
-
-                        if (Integer.valueOf(-1).equals(old)) {
-                            Method setter = j0.getDeclaredMethod("j", Integer.TYPE);
-                            setter.setAccessible(true);
-                            setter.invoke(result, 1);
-                            log("REQUEST MODE: forced H.k -1 -> 1");
-                        }
-                    } catch (Throwable e) {
-                        log("REQUEST MODE: force failed: "
-                                + e.getClass().getName() + ": "
-                                + String.valueOf(e.getMessage()));
-                    }
+            Class<?> http = Class.forName("com.miui.yellowpage.utils.i0", false, cl);
+            Method setter = http.getDeclaredMethod("j", Integer.TYPE);
+            XposedBridge.hookMethod(setter, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    if (param.thisObject == null || param.args == null || param.args.length != 1) return;
+                    if (!Integer.valueOf(-1).equals(param.args[0])) return;
+                    if (!isInstanceOf(param.thisObject, "com.miui.yellowpage.utils.H", cl)) return;
+                    param.args[0] = 1;
+                    log("REQUEST MODE: i0.j(-1) -> 1 for YellowPage H");
                 }
             });
-            log("hooked REQUEST MODE: o0.a.j(Context) -> H");
+            log("hooked REQUEST MODE: i0.j(int)");
         } catch (Throwable e) {
-            log("REQUEST MODE hook failed: " + e.getClass().getName()
-                    + ": " + String.valueOf(e.getMessage()));
+            log("REQUEST MODE hook failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
@@ -2519,27 +2120,6 @@ public class HookEntry implements IXposedHookLoadPackage {
             }
         } catch (Throwable e) {
             log("NETWORK GATE Permission hook failed: "
-                    + e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
-        }
-
-        try {
-            Class<?> x = Class.forName("com.miui.yellowpage.utils.X", false, cl);
-            Method method = x.getDeclaredMethod("k", Context.class);
-            if (!Modifier.isStatic(method.getModifiers())
-                    || method.getReturnType() != Boolean.TYPE) {
-                log("NETWORK GATE X.k signature mismatch");
-            } else {
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        log("NETWORK GATE: X.k(Context) -> "
-                                + String.valueOf(param.getResult()));
-                    }
-                });
-                log("hooked NETWORK GATE: X.k(Context)");
-            }
-        } catch (Throwable e) {
-            log("NETWORK GATE X.k hook failed: "
                     + e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
         }
 
@@ -2812,107 +2392,50 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void hookPullTaskPipeline(ClassLoader cl, Context context) {
         try {
-            // Job 0 does not call PullTask.y() directly. The real chain is:
-            // YellowPageJobService -> job.a.c(Context) -> n0.C0372d.a(...)
-            // -> AbstractC0381d.z(...) -> concrete PullTask.y(Context).
-            try {
-                Class<?> jobManager = Class.forName("com.miui.yellowpage.job.a", false, cl);
-                Method cMethod = jobManager.getDeclaredMethod("c", Context.class);
-                XposedBridge.hookMethod(cMethod, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        log("PullPipeline ENTER: job.a.c(Context)");
-                        Context ctx = param.args[0] instanceof Context
-                                ? (Context) param.args[0] : context;
-                        logDatabaseStats(ctx, cl, "BEFORE_SYNC");
-                    }
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        log("PullPipeline RESULT: job.a.c(Context)=" + String.valueOf(param.getResult()));
-                        Context ctx = param.args[0] instanceof Context
-                                ? (Context) param.args[0] : context;
-                        logDatabaseStats(ctx, cl, "AFTER_SYNC");
-                    }
-                });
-                log("hooked PullPipeline: com.miui.yellowpage.job.a.c(Context)");
-            } catch (Throwable e) {
-                log("PullPipeline job.a hook failed: " + e.getClass().getSimpleName());
-            }
-
-            try {
-                Class<?> daemon = Class.forName("n0.C0372d", false, cl);
-                for (Method method : daemon.getDeclaredMethods()) {
-                    Class<?>[] p = method.getParameterTypes();
-                    if (!"a".equals(method.getName())
-                            || p.length != 2
-                            || p[0] != Context.class) {
-                        continue;
-                    }
-                    XposedBridge.hookMethod(method, new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam param) {
-                            log("PullPipeline ENTER: n0.C0372d.a(Context,...)");
-                        }
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            log("PullPipeline EXIT: n0.C0372d.a(Context,...)");
-                        }
-                    });
-                    log("hooked PullPipeline: n0.C0372d.a");
+            Class<?> jobManager = Class.forName("com.miui.yellowpage.job.a", false, cl);
+            Method cMethod = jobManager.getDeclaredMethod("c", Context.class);
+            XposedBridge.hookMethod(cMethod, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    log("PullPipeline ENTER: job.a.c(Context)");
+                    Context ctx = param.args[0] instanceof Context ? (Context) param.args[0] : context;
+                    logDatabaseStats(ctx, cl, "BEFORE_SYNC");
                 }
-            } catch (Throwable e) {
-                log("PullPipeline daemon hook failed: " + e.getClass().getSimpleName());
-            }
-
-            try {
-                Class<?> base = Class.forName("o0.d", false, cl);
-                Method zMethod = base.getDeclaredMethod(
-                        "z", Context.class, String.class, Long.TYPE, Boolean.TYPE);
-                XposedBridge.hookMethod(zMethod, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        log("PullPipeline ENTER: AbstractC0381d.z(Context,String,long,boolean) "
-                                + "class=" + param.thisObject.getClass().getName());
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        log("PullPipeline THROW: job.a.c(Context) "
+                                + param.getThrowable().getClass().getSimpleName() + ": "
+                                + String.valueOf(param.getThrowable().getMessage()));
+                    } else {
+                        log("PullPipeline RESULT: job.a.c(Context)=" + String.valueOf(param.getResult()));
                     }
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        log("PullPipeline EXIT: AbstractC0381d.z class="
+                    Context ctx = param.args[0] instanceof Context ? (Context) param.args[0] : context;
+                    logDatabaseStats(ctx, cl, "AFTER_SYNC");
+                }
+            });
+            log("hooked PullPipeline: job.a.c(Context)");
+
+            Class<?> base = Class.forName("p0.d", false, cl);
+            Class<?> dataClass = Class.forName("m0.d", false, cl);
+            Method aMethod = base.getDeclaredMethod("a", Context.class, dataClass);
+            XposedBridge.hookMethod(aMethod, new XC_MethodHook() {
+                @Override protected void beforeHookedMethod(MethodHookParam param) {
+                    log("PullPipeline ENTER: p0.d.a(Context,m0.d) class="
+                            + param.thisObject.getClass().getName());
+                }
+                @Override protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        log("PullPipeline THROW: p0.d.a "
+                                + param.getThrowable().getClass().getSimpleName() + ": "
+                                + String.valueOf(param.getThrowable().getMessage()));
+                    } else {
+                        log("PullPipeline EXIT: p0.d.a class="
                                 + param.thisObject.getClass().getName());
                     }
-                });
-                log("hooked PullPipeline: o0.d.z");
-            } catch (Throwable e) {
-                log("PullPipeline AbstractC0381d.z hook failed: "
-                        + e.getClass().getSimpleName());
-            }
-        } catch (Throwable e) {
-            log("PullPipeline hook failed: " + e.getClass().getSimpleName());
-        }
-    }
-
-
-    private static void hookContactsGate(
-            ClassLoader cl, String methodName) {
-        try {
-            Class<?> proxy = Class.forName(
-                    "com.android.contacts.util.YellowPageProxy", false, cl);
-            for (Method method : proxy.getDeclaredMethods()) {
-                if (!methodName.equals(method.getName())
-                        || method.getReturnType() != Boolean.TYPE
-                        || method.getParameterTypes().length != 1
-                        || method.getParameterTypes()[0] != Context.class) {
-                    continue;
                 }
-                XposedBridge.hookMethod(method, new XC_MethodHook() {                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        param.setResult(true);
-                    }
-                });
-                log("hooked Contacts YellowPageProxy." + methodName + "(Context)");
-            }
+            });
+            log("hooked PullPipeline: p0.d.a(Context,m0.d)");
         } catch (Throwable e) {
-            log("Contacts hook failed " + methodName + ": "
-                    + e.getClass().getSimpleName());
+            log("PullPipeline hook failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
@@ -3033,6 +2556,150 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 
+    private static void hookJobDispatcher(ClassLoader cl, Context context) {
+        try {
+            Class<?> dispatcher = null;
+
+            // JADX reports this class as a0.C0166b, but some EEA builds can
+            // expose the obfuscated package/class through a different dex
+            // loading path. Try the exact name first, then locate the class
+            // by the unique dispatcher method signatures.
+            try {
+                dispatcher = Class.forName("a0.C0166b", false, cl);
+            } catch (Throwable ignored) {
+                // Fall through to dex scan.
+            }
+
+            if (dispatcher == null) {
+                java.util.ArrayList<String> paths = new java.util.ArrayList<>();
+                if (context != null) {
+                    paths.add(context.getApplicationInfo().sourceDir);
+                    String[] splits = context.getApplicationInfo().splitSourceDirs;
+                    if (splits != null) {
+                        for (String split : splits) {
+                            if (split != null && !paths.contains(split)) paths.add(split);
+                        }
+                    }
+                }
+
+                for (String apkPath : paths) {
+                    DexFile dex = new DexFile(apkPath);
+                    try {
+                        Enumeration<String> entries = dex.entries();
+                        while (entries.hasMoreElements() && dispatcher == null) {
+                            String name = entries.nextElement();
+                            if (name.indexOf('.') < 0) continue;
+                            try {
+                                Class<?> candidate = Class.forName(name, false, cl);
+                                boolean hasA = false;
+                                boolean hasE = false;
+                                for (Method m : candidate.getDeclaredMethods()) {
+                                    Class<?>[] p = m.getParameterTypes();
+                                    if ("a".equals(m.getName())
+                                            && Modifier.isStatic(m.getModifiers())
+                                            && m.getReturnType() == Boolean.TYPE
+                                            && p.length == 2
+                                            && p[0] == Context.class
+                                            && p[1] == Integer.TYPE) {
+                                        hasA = true;
+                                    }
+                                    if ("e".equals(m.getName())
+                                            && Modifier.isStatic(m.getModifiers())
+                                            && m.getReturnType() == Void.TYPE
+                                            && p.length == 3
+                                            && p[0] == Context.class
+                                            && p[1] == Integer.TYPE
+                                            && p[2] == Boolean.TYPE) {
+                                        hasE = true;
+                                    }
+                                }
+                                if (hasA && hasE) {
+                                    dispatcher = candidate;
+                                    log("JobDispatcher class found by method shape: "
+                                            + candidate.getName());
+                                }
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    } finally {
+                        dex.close();
+                    }
+                }
+            }
+
+            if (dispatcher == null) {
+                log("JobDispatcher class not found");
+                return;
+            }
+
+            // EEA disables pull_task_job through i.f(Context). Restore only
+            // the Yellow Page pull job gate; leave the other jobs untouched.
+            for (Method method : dispatcher.getDeclaredMethods()) {
+                if (!"a".equals(method.getName())
+                        || !Modifier.isStatic(method.getModifiers())
+                        || method.getReturnType() != Boolean.TYPE) {
+                    continue;
+                }
+
+                Class<?>[] p = method.getParameterTypes();
+                if (p.length != 2 || p[0] != Context.class || p[1] != Integer.TYPE) {
+                    continue;
+                }
+
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        int jobId = (Integer) param.args[1];
+                        if (jobId == 0) {
+                            log("JobDispatcher.canScheduleJob: pull_task_job -> true");
+                            param.setResult(true);
+                        }
+                    }
+                });
+                log("hooked JobDispatcher.canScheduleJob(Context,int)");
+            }
+
+            // Log the actual scheduling call so we can verify that JobScheduler
+            // receives pull_task_job after the gate is restored.
+            for (Method method : dispatcher.getDeclaredMethods()) {
+                if (!"e".equals(method.getName())
+                        || !Modifier.isStatic(method.getModifiers())
+                        || method.getReturnType() != Void.TYPE) {
+                    continue;
+                }
+
+                Class<?>[] p = method.getParameterTypes();
+                if (p.length != 3
+                        || p[0] != Context.class
+                        || p[1] != Integer.TYPE
+                        || p[2] != Boolean.TYPE) {
+                    continue;
+                }
+
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        int jobId = (Integer) param.args[1];
+                        if (jobId == 0) {
+                            log("JobDispatcher.scheduleJob ENTER: pull_task_job");
+                        }
+                    }
+
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        int jobId = (Integer) param.args[1];
+                        if (jobId == 0) {
+                            log("JobDispatcher.scheduleJob EXIT: pull_task_job");
+                        }
+                    }
+                });
+                log("hooked JobDispatcher.scheduleJob(Context,int,boolean)");
+            }
+        } catch (Throwable e) {
+            log("JobDispatcher hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
     private static void installProviderHooks(
             ClassLoader cl, Class<?> dbHelperClass) throws Throwable {
         Class<?> providerClass = Class.forName(
@@ -3053,6 +2720,8 @@ public class HookEntry implements IXposedHookLoadPackage {
                             hookYellowPageNetworkGates(cl);
                             hookYellowPageStreamUtility(cl);
 hookMeteredNetworkGuard(cl);
+                            hookPullTaskPipeline(cl, context);
+                            hookYellowPagePullTask(cl, context);
                             hookJobDispatcher(cl, context);
                         } catch (Throwable e) {
                             log("provider onCreate hook failed: "
@@ -3185,6 +2854,31 @@ hookMeteredNetworkGuard(cl);
             log("hooked com.miui.yellowpage.utils.H.w()");
         } catch (Throwable e) {
             log("H.w hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
+    private static void hookContactsGate(
+            ClassLoader cl, String methodName) {
+        try {
+            Class<?> proxy = Class.forName(
+                    "com.android.contacts.util.YellowPageProxy", false, cl);
+            for (Method method : proxy.getDeclaredMethods()) {
+                if (!methodName.equals(method.getName())
+                        || method.getReturnType() != Boolean.TYPE
+                        || method.getParameterTypes().length != 1
+                        || method.getParameterTypes()[0] != Context.class) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        param.setResult(true);
+                    }
+                });
+                log("hooked Contacts YellowPageProxy." + methodName + "(Context)");
+            }
+        } catch (Throwable e) {
+            log("Contacts hook failed " + methodName + ": "
+                    + e.getClass().getSimpleName());
         }
     }
 
