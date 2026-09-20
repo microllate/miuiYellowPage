@@ -2256,6 +2256,92 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 
+
+    private static void hookYellowPageImportPipeline(ClassLoader cl) {
+        try {
+            Class<?> dbHelper = Class.forName(
+                    "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
+                    false, cl);
+
+            Method n = dbHelper.getDeclaredMethod("N", Context.class, SQLiteDatabase.class);
+            n.setAccessible(true);
+            XposedBridge.hookMethod(n, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    try {
+                        Context ctx = param.args[0] instanceof Context
+                                ? (Context) param.args[0] : null;
+                        java.io.File file = ctx == null ? null
+                                : new java.io.File(ctx.getFilesDir(), "yellowpage/yellow_pages.dat");
+                        log("YP-IMPORT N ENTER: file="
+                                + (file == null ? "null" : file.getAbsolutePath())
+                                + " exists=" + (file != null && file.exists())
+                                + " bytes=" + (file != null && file.exists() ? file.length() : 0));
+                    } catch (Throwable e) {
+                        log("YP-IMPORT N ENTER ERROR: " + e.getClass().getSimpleName());
+                    }
+                }
+
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        Throwable t = param.getThrowable();
+                        log("YP-IMPORT N THROW: " + t.getClass().getName()
+                                + ": " + String.valueOf(t.getMessage()));
+                    } else {
+                        log("YP-IMPORT N EXIT");
+                    }
+                }
+            });
+            log("hooked YP-IMPORT: YellowPageDatabaseHelper.N(Context,SQLiteDatabase)");
+
+            Class<?> yellowPage = Class.forName("miui.yellowpage.YellowPage", false, cl);
+            Method fromJson = yellowPage.getDeclaredMethod("fromJson", String.class);
+            fromJson.setAccessible(true);
+            XposedBridge.hookMethod(fromJson, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        Throwable t = param.getThrowable();
+                        log("YP-IMPORT fromJson THROW: " + t.getClass().getSimpleName());
+                    } else if (param.getResult() != null) {
+                        log("YP-IMPORT fromJson OK");
+                    } else {
+                        log("YP-IMPORT fromJson NULL");
+                    }
+                }
+            });
+            log("hooked YP-IMPORT: YellowPage.fromJson(String)");
+
+            Class<?> phoneLookup = Class.forName("f0.g", false, cl);
+            Method insertPhones = phoneLookup.getDeclaredMethod(
+                    "f", SQLiteDatabase.class, yellowPage);
+            insertPhones.setAccessible(true);
+            XposedBridge.hookMethod(insertPhones, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    log("YP-IMPORT phone_lookup ENTER");
+                }
+
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        Throwable t = param.getThrowable();
+                        log("YP-IMPORT phone_lookup THROW: "
+                                + t.getClass().getSimpleName());
+                    } else {
+                        log("YP-IMPORT phone_lookup EXIT");
+                    }
+                }
+            });
+            log("hooked YP-IMPORT: f0.g.f(SQLiteDatabase,YellowPage)");
+        } catch (Throwable e) {
+            log("YP-IMPORT hook install failed: " + e.getClass().getSimpleName()
+                    + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+
     private static void hookYellowPageDataDecode(ClassLoader cl) {
         try {
             // Keep this hook targeted: only observe methods that directly accept
@@ -3478,6 +3564,7 @@ public class HookEntry implements IXposedHookLoadPackage {
             hookYellowPageCnHost(cl);
             hookYellowPagePresetRegionGuard(cl);
             hookYellowPageActionZero(cl);
+            hookYellowPageImportPipeline(cl);
             hookYellowPageDataDecode(cl);
             hookYellowPageDownload(cl);
             hookBooleanContextMethod(
