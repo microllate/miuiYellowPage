@@ -2911,9 +2911,6 @@ hookMeteredNetworkGuard(cl);
             Class<?> pullClass = Class.forName("p0.g", false, cl);
             Class<?> configClass = Class.forName("m0.d", false, cl);
             Method run = pullBase.getDeclaredMethod("a", Context.class, configClass);
-            Method localVersion = pullBase.getDeclaredMethod("e", Context.class);
-            Method parseAndPull = pullBase.getDeclaredMethod("r", Context.class, String.class);
-            parseAndPull.setAccessible(true);
 
             final String bootstrapResponse =
                     "{"
@@ -2935,15 +2932,17 @@ hookMeteredNetworkGuard(cl);
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
                     try {
-                        if (!(param.thisObject instanceof p0.g)) return;
                         Context context = (Context) param.args[0];
-                        long version = ((Number) localVersion.invoke(param.thisObject, context)).longValue();
-                        if (version >= 82L) return;
 
-                        log("CN DIRECT BOOTSTRAP: localVersion=" + version + " -> serverVersion=82");
-                        parseAndPull.invoke(param.thisObject, context, bootstrapResponse);
+                        Object task = pullClass.getDeclaredConstructor().newInstance();
+                        Method responseHandler = pullClass.getDeclaredMethod(
+                                "r", Context.class, String.class);
+                        responseHandler.setAccessible(true);
+
+                        log("CN DIRECT BOOTSTRAP: bypass H.w status gate");
+                        responseHandler.invoke(task, context, bootstrapResponse);
                         param.setResult(null);
-                        log("CN DIRECT BOOTSTRAP: p0.g.r -> direct p0.d.n completed");
+                        log("CN DIRECT BOOTSTRAP: p0.g.r invoked");
                     } catch (Throwable e) {
                         Throwable cause = e;
                         if (e instanceof java.lang.reflect.InvocationTargetException
@@ -3013,7 +3012,7 @@ hookMeteredNetworkGuard(cl);
     private static void hookYellowPageHConstructor(ClassLoader cl) {
         try {
             Class<?> hClass = Class.forName("com.miui.yellowpage.utils.H", false, cl);
-            Constructor<?> ctor = hClass.getDeclaredConstructor(Context.class, String.class);
+            java.lang.reflect.Constructor<?> ctor = hClass.getDeclaredConstructor(Context.class, String.class);
             XposedBridge.hookMethod(ctor, new XC_MethodHook() {
                 @Override
                 protected void beforeHookedMethod(MethodHookParam param) {
