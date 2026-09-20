@@ -1357,6 +1357,15 @@ public class HookEntry implements IXposedHookLoadPackage {
                             String urlString = (String) param.args[1];
                             String filePath = (String) param.args[2];
 
+                            // The CN PullTask still hands x.j the global CDN URL on EEA.
+                            // Force this actual file download to the CN Yellow Page CDN.
+                            if (urlString.contains("global.api.huangye.miui.com")) {
+                                urlString = urlString.replace(
+                                        "global.api.huangye.miui.com",
+                                        "api.huangye.miui.com");
+                                log("STREAM UTIL CN URL: global -> CN");
+                            }
+
                             if (urlString.contains("/yellowpage/yp-spam/")) {
                                 java.io.File outFile = new java.io.File(filePath);
                                 java.io.File parent = outFile.getParentFile();
