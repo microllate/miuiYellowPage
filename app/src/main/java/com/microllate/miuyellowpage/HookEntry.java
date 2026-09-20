@@ -3085,10 +3085,46 @@ public class HookEntry implements IXposedHookLoadPackage {
                                 }
                             } else {
                                 Object result = param.getResult();
+                                String resultText = String.valueOf(result);
+                                if (resultText.length() > 1600) {
+                                    resultText = resultText.substring(0, 1600);
+                                }
                                 log("POST PIPE RESULT: " + methodName
-                                        + " -> " + String.valueOf(result)
+                                        + " -> " + resultText
                                         + " class=" + (result == null
                                         ? "null" : result.getClass().getName()));
+
+                                // Compact response diagnostics: capture the fields that
+                                // distinguish CN/Global cat_sync behavior without dumping
+                                // the entire response repeatedly.
+                                if (result instanceof String) {
+                                    String json = (String) result;
+                                    String[] keys = {
+                                            "result", "action", "oldVersion", "newVersion",
+                                            "fileSize", "md5Sum", "oldMd5Sum", "newMd5Sum",
+                                            "fileURL", "patchType"
+                                    };
+                                    StringBuilder summary = new StringBuilder();
+                                    for (String key : keys) {
+                                        try {
+                                            org.json.JSONObject obj = new org.json.JSONObject(json);
+                                            Object value = obj.opt(key);
+                                            if (value == null || value == org.json.JSONObject.NULL) {
+                                                org.json.JSONObject info = obj.optJSONObject("info");
+                                                value = info == null ? null : info.opt(key);
+                                            }
+                                            if (value != null && value != org.json.JSONObject.NULL) {
+                                                if (summary.length() > 0) summary.append(" | ");
+                                                summary.append(key).append("=").append(String.valueOf(value));
+                                            }
+                                        } catch (Throwable ignored) {
+                                            break;
+                                        }
+                                    }
+                                    if (summary.length() > 0) {
+                                        log("CAT_SYNC RESPONSE: " + summary);
+                                    }
+                                }
                             }
 
                         }
@@ -3537,3 +3573,4 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 }
+
