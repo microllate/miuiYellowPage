@@ -2904,31 +2904,50 @@ hookMeteredNetworkGuard(cl);
     }
 
 
-    private static void hookYellowPageWStatus(ClassLoader cl) {
+    private static void hookYellowPageDaemon(ClassLoader cl) {
         try {
-            Class<?> hClass = Class.forName("com.miui.yellowpage.utils.H", false, cl);
-            Method w = hClass.getDeclaredMethod("w");
-            if (w.getReturnType() != Integer.TYPE || w.getParameterTypes().length != 0) {
-                log("H.w() shape unexpected");
-                return;
-            }
-            XposedBridge.hookMethod(w, new XC_MethodHook() {
+            Class<?> daemon = Class.forName("o0.C0395d", false, cl);
+            Class<?> config = Class.forName("m0.d", false, cl);
+            Method run = daemon.getDeclaredMethod("a", Context.class, config);
+            XposedBridge.hookMethod(run, new XC_MethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (param.hasThrowable()) return;
-                    Object result = param.getResult();
-                    if (result instanceof Integer && ((Integer) result) == 3) {
-                        log("H.w STATUS: 3 -> 0 (diagnostic bypass)");
-                        param.setResult(0);
-                    } else {
-                        log("H.w STATUS: " + String.valueOf(result));
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    try {
+                        Context context = (Context) param.args[0];
+                        Object dVar = param.args[1];
+                        Class<?> pull = Class.forName("p0.g", false, cl);
+                        Object task = pull.getDeclaredConstructor().newInstance();
+                        Method w = pull.getMethod("w", Context.class, String.class, Long.TYPE, Boolean.TYPE);
+                        boolean wifiOnly = false;
+                        try {
+                            Method c = config.getMethod("c");
+                            Object value = c.invoke(dVar);
+                            if (value instanceof Boolean) wifiOnly = (Boolean) value;
+                        } catch (Throwable ignored) {
+                        }
+
+                        log("PullDaemon: forcing native p0.g.w()");
+                        w.invoke(task, context, null, Long.MAX_VALUE, wifiOnly);
+                        param.setResult(null);
+                        log("PullDaemon: native p0.g.w() finished");
+                    } catch (Throwable e) {
+                        log("PullDaemon: force p0.g.w failed: "
+                                + e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
                     }
                 }
             });
-            log("hooked com.miui.yellowpage.utils.H.w()");
+            log("hooked PullTask daemon: o0.C0395d.a(Context,m0.d)");
         } catch (Throwable e) {
-            log("H.w hook failed: " + e.getClass().getSimpleName());
+            log("PullTask daemon hook failed: " + e.getClass().getSimpleName()
+                    + ": " + String.valueOf(e.getMessage()));
         }
+    }
+
+    private static void hookYellowPageWStatus(ClassLoader cl) {
+        // Do not rewrite H.w(). Status 3 is part of the real request state;
+        // changing it to 0 hides the actual failure and can prevent the native
+        // PullTask response/download path from being observed.
+        log("H.w status bypass removed");
     }
 
     private static void hookContactsGate(
@@ -2976,7 +2995,7 @@ hookMeteredNetworkGuard(cl);
             ClassLoader cl = lpparam.classLoader;
             log("YELLOWPAGE LOAD ENTER classLoader=" + String.valueOf(cl));
             hookYellowPageRequestMode(cl);
-            hookYellowPageWStatus(cl);
+            hookYellowPageWStatus(cl);\n            hookYellowPageDaemon(cl);
             hookYellowPageActualRequestBuilder(cl);
             hookYellowPageRegionParam(cl);
             hookYellowPageCnHost(cl);
