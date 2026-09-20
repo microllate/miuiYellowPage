@@ -1885,6 +1885,35 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 
+
+    private static void hookCnDirectDownloadUrl(ClassLoader cl) {
+        try {
+            Class<?> downloader = Class.forName("com.miui.yellowpage.utils.x", false, cl);
+            Method method = downloader.getDeclaredMethod(
+                    "i", Context.class, String.class, String.class, Integer.TYPE);
+            XposedBridge.hookMethod(method, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (param.args == null || param.args.length < 2
+                            || !(param.args[1] instanceof String)) {
+                        return;
+                    }
+                    String url = (String) param.args[1];
+                    if (url.contains("global.api.huangye.miui.com")) {
+                        String cnUrl = url.replace(
+                                "global.api.huangye.miui.com",
+                                "api.huangye.miui.com");
+                        param.args[1] = cnUrl;
+                        log("CN DIRECT DOWNLOAD URL: global -> CN");
+                    }
+                }
+            });
+            log("hooked CN direct downloader: com.miui.yellowpage.utils.x.i(Context,String,String,int)");
+        } catch (Throwable e) {
+            log("CN direct downloader hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
     private static void hookYellowPageDownload(ClassLoader cl) {
         try {
             Class<?> pullBase = Class.forName("p0.d", false, cl);
