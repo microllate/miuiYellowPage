@@ -2167,13 +2167,6 @@ public class HookEntry implements IXposedHookLoadPackage {
                             Throwable t = param.getThrowable();
                             log("DOWNLOAD THROW: o0.d.p " + t.getClass().getName()
                                     + ": " + String.valueOf(t.getMessage()));
-                            Throwable c = t.getCause();
-                            int depth = 0;
-                            while (c != null && depth++ < 5) {
-                                log("DOWNLOAD CAUSE[" + depth + "]: " + c.getClass().getName()
-                                        + ": " + String.valueOf(c.getMessage()));
-                                c = c.getCause();
-                            }
                         } else {
                             log("DOWNLOAD RESULT: o0.d.p -> " + String.valueOf(param.getResult()));
                         }
