@@ -2906,7 +2906,7 @@ hookMeteredNetworkGuard(cl);
 
     private static void hookYellowPageDaemon(ClassLoader cl) {
         try {
-            Class<?> daemon = Class.forName("o0.C0395d", false, cl);
+            Class<?> daemon = Class.forName("o0.d", false, cl);
             Class<?> config = Class.forName("m0.d", false, cl);
             Method run = daemon.getDeclaredMethod("a", Context.class, config);
             XposedBridge.hookMethod(run, new XC_MethodHook() {
@@ -2936,7 +2936,7 @@ hookMeteredNetworkGuard(cl);
                     }
                 }
             });
-            log("hooked PullTask daemon: o0.C0395d.a(Context,m0.d)");
+            log("hooked PullTask daemon: o0.d.a(Context,m0.d)");
         } catch (Throwable e) {
             log("PullTask daemon hook failed: " + e.getClass().getSimpleName()
                     + ": " + String.valueOf(e.getMessage()));
