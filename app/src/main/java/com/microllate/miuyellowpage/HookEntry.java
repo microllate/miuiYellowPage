@@ -87,6 +87,42 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 
+    private static void hookYellowPageActionZero(ClassLoader cl) {
+        try {
+            Class<?> pull = Class.forName("o0.g", false, cl);
+            for (Method method : pull.getDeclaredMethods()) {
+                Class<?>[] p = method.getParameterTypes();
+                if (!"t".equals(method.getName())
+                        || method.getReturnType() != Boolean.TYPE
+                        || p.length != 2
+                        || p[0] != Context.class
+                        || p[1] != String.class) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        try {
+                            String body = (String) param.args[1];
+                            org.json.JSONObject root = new org.json.JSONObject(body);
+                            if (root.optInt("action", -1) == 0
+                                    && root.optJSONObject("info") != null) {
+                                root.put("action", 1);
+                                param.args[1] = root.toString();
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                });
+                log("CN SYNC: o0.g.t action=0 -> action=1");
+                return;
+            }
+            log("CN SYNC: o0.g.t(Context,String) not found");
+        } catch (Throwable e) {
+            log("CN SYNC action hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
     private static void hookYellowPagePullTask(ClassLoader cl, Context context) {
         try {
             Class<?> cls = Class.forName("o0.g", false, cl);
@@ -3537,6 +3573,7 @@ public class HookEntry implements IXposedHookLoadPackage {
             hookYellowPageActualRequestBuilder(cl);
             hookYellowPageRegionParam(cl);
             hookYellowPageCnHost(cl);
+            hookYellowPageActionZero(cl);
             hookYellowPageDataDecode(cl);
             hookYellowPageDownload(cl);
             hookBooleanContextMethod(
