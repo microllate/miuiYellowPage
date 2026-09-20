@@ -104,6 +104,42 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 
+    private static void hookYellowPagePullResponse(ClassLoader cl) {
+        try {
+            Class<?> base = Class.forName("p0.d", false, cl);
+            Method w = base.getDeclaredMethod(
+                    "w", Context.class, String.class, Long.TYPE, Boolean.TYPE);
+            XposedBridge.hookMethod(w, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    try {
+                        if (param.args == null || param.args.length < 2
+                                || !(param.args[1] instanceof String)) return;
+
+                        String response = (String) param.args[1];
+                        if (response.length() == 0) return;
+
+                        org.json.JSONObject root = new org.json.JSONObject(response);
+                        org.json.JSONObject info = root.optJSONObject("info");
+                        int action = root.optInt("action", -1);
+
+                        if (info != null && action != 1) {
+                            root.put("action", 1);
+                            param.args[1] = root.toString();
+                            log("DAT DOWNLOAD GATE: action=" + action + " -> 1 (info present)");
+                        }
+                    } catch (Throwable e) {
+                        log("DAT DOWNLOAD GATE failed: " + e.getClass().getSimpleName());
+                    }
+                }
+            });
+            log("hooked DAT download gate: p0.d.w(Context,String,long,boolean)");
+        } catch (Throwable e) {
+            log("DAT download gate hook failed: " + e.getClass().getName()
+                    + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
     private static void hookYellowPageActionZero(ClassLoader cl) {
         try {
             Class<?> pull = Class.forName("p0.g", false, cl);
@@ -2946,6 +2982,7 @@ hookMeteredNetworkGuard(cl);
             hookYellowPageCnHost(cl);
             hookYellowPagePresetRegionGuard(cl);
             hookYellowPageActionZero(cl);
+            hookYellowPagePullResponse(cl);
 hookYellowPageDownload(cl);
             hookBooleanContextMethod(
                     cl, "miui.yellowpage.YellowPageUtils",
