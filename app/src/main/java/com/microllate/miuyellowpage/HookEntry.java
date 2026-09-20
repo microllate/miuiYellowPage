@@ -2904,6 +2904,64 @@ hookMeteredNetworkGuard(cl);
     }
 
 
+
+    private static void hookCnYellowPageDirectBootstrap(ClassLoader cl) {
+        try {
+            Class<?> pullBase = Class.forName("p0.d", false, cl);
+            Class<?> pullClass = Class.forName("p0.g", false, cl);
+            Class<?> configClass = Class.forName("m0.d", false, cl);
+            Method run = pullBase.getDeclaredMethod("a", Context.class, configClass);
+            Method localVersion = pullBase.getDeclaredMethod("e", Context.class);
+            Method parseAndPull = pullBase.getDeclaredMethod("r", Context.class, String.class);
+            parseAndPull.setAccessible(true);
+
+            final String bootstrapResponse =
+                    "{"
+                    + "\"result\":true,"
+                    + "\"action\":1,"
+                    + "\"info\":{"
+                    + "\"serviceType\":2,"
+                    + "\"oldVersion\":0,"
+                    + "\"newVersion\":82,"
+                    + "\"fileSize\":1228718,"
+                    + "\"md5Sum\":\"02ab27035f9dc85332e51d4eb40cb955\","
+                    + "\"oldMd5Sum\":\"\","
+                    + "\"newMd5Sum\":\"\","
+                    + "\"fileURL\":\"https://cdn.cnbj1.fds.api.mi-img.com/core-app/privacy/yellowpage/yp-spam/82/20260919120751/yp_spam_82\","
+                    + "\"patchType\":1"
+                    + "}}";
+
+            XposedBridge.hookMethod(run, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    try {
+                        if (!(param.thisObject instanceof p0.g)) return;
+                        Context context = (Context) param.args[0];
+                        long version = ((Number) localVersion.invoke(param.thisObject, context)).longValue();
+                        if (version >= 82L) return;
+
+                        log("CN DIRECT BOOTSTRAP: localVersion=" + version + " -> serverVersion=82");
+                        parseAndPull.invoke(param.thisObject, context, bootstrapResponse);
+                        param.setResult(null);
+                        log("CN DIRECT BOOTSTRAP: p0.g.r -> direct p0.d.n completed");
+                    } catch (Throwable e) {
+                        Throwable cause = e;
+                        if (e instanceof java.lang.reflect.InvocationTargetException
+                                && ((java.lang.reflect.InvocationTargetException) e).getCause() != null) {
+                            cause = ((java.lang.reflect.InvocationTargetException) e).getCause();
+                        }
+                        log("CN DIRECT BOOTSTRAP failed: " + cause.getClass().getName()
+                                + ": " + String.valueOf(cause.getMessage()));
+                    }
+                }
+            });
+            log("hooked CN direct YellowPage bootstrap: p0.d.a(Context,m0.d)");
+        } catch (Throwable e) {
+            log("CN direct bootstrap hook failed: " + e.getClass().getName()
+                    + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
     private static void hookYellowPageDaemon(ClassLoader cl) {
         try {
             Class<?> daemon = Class.forName("o0.d", false, cl);
@@ -3041,6 +3099,7 @@ hookMeteredNetworkGuard(cl);
             hookYellowPageRequestMode(cl);
             hookYellowPageWStatus(cl);
             hookYellowPageHConstructor(cl);
+            hookCnYellowPageDirectBootstrap(cl);
             hookYellowPageDaemon(cl);
             hookYellowPageActualRequestBuilder(cl);
             hookYellowPageRegionParam(cl);
