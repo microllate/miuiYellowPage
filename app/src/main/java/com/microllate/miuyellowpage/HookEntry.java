@@ -2953,10 +2953,20 @@ hookMeteredNetworkGuard(cl);
     }
 
     private static void hookYellowPageWStatus(ClassLoader cl) {
-        // Do not rewrite H.w(). Status 3 is part of the real request state;
-        // changing it to 0 hides the actual failure and can prevent the native
-        // PullTask response/download path from being observed.
-        log("H.w status bypass removed");
+        try {
+            Class<?> hClass = Class.forName("com.miui.yellowpage.utils.H", false, cl);
+            Method w = hClass.getDeclaredMethod("w");
+            XposedBridge.hookMethod(w, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) return;
+                    log("H.w REAL STATUS=" + String.valueOf(param.getResult()));
+                }
+            });
+            log("hooked H.w() diagnostic only");
+        } catch (Throwable e) {
+            log("H.w diagnostic hook failed: " + e.getClass().getSimpleName());
+        }
     }
 
     private static void hookContactsGate(
