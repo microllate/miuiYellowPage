@@ -3286,40 +3286,6 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 
-    private static void importYellowPageData(
-            ClassLoader cl, Context context, Class<?> dbHelperClass) {
-        try {
-            Object helper = XposedHelpers.callStaticMethod(
-                    dbHelperClass, "E", context);
-            SQLiteDatabase db = (SQLiteDatabase) XposedHelpers.callMethod(
-                    helper, "getWritableDatabase");
-
-            Cursor c = null;
-            try {
-                c = db.rawQuery(
-                        "SELECT (SELECT COUNT(*) FROM yellow_page),"
-                                + " (SELECT COUNT(*) FROM phone_lookup)", null);
-                if (c.moveToFirst() && c.getInt(0) > 0 && c.getInt(1) > 0) {
-                    log("database ready; yellow_page=" + c.getInt(0)
-                            + ", phone_lookup=" + c.getInt(1));
-                    return;
-                }
-            } finally {
-                if (c != null) {
-                    c.close();
-                }
-            }
-
-            log("database incomplete; importing preset data");
-            installPresetHooks(cl, context);
-            XposedHelpers.callMethod(helper, "L", db);
-            XposedHelpers.callMethod(helper, "N", context, db);
-            log("preset import requested");
-        } catch (Throwable e) {
-            log("preset import failed: " + e.getClass().getSimpleName());
-        }
-    }
-
     private static void copyCursorValue(
             Cursor source, int column, Object[] row) {
         switch (source.getType(column)) {
@@ -3365,7 +3331,6 @@ public class HookEntry implements IXposedHookLoadPackage {
         hookYellowPagePostResponsePipeline(cl);
                             hookMeteredNetworkGuard(cl);
                             hookJobDispatcher(cl, context);
-                            importYellowPageData(cl, context, dbHelperClass);
                         } catch (Throwable e) {
                             log("provider onCreate hook failed: "
                                     + e.getClass().getSimpleName());
