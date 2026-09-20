@@ -118,7 +118,7 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void hookYellowPageActionZero(ClassLoader cl) {
         try {
-            Class<?> pull = Class.forName("p0.g", false, cl);
+            Class<?> pull = Class.forName("o0.g", false, cl);
             for (Method method : pull.getDeclaredMethods()) {
                 Class<?>[] p = method.getParameterTypes();
                 if (!"t".equals(method.getName())
@@ -143,10 +143,10 @@ public class HookEntry implements IXposedHookLoadPackage {
                         }
                     }
                 });
-                log("CN SYNC: p0.g.t action=0 -> action=1");
+                log("CN SYNC: o0.g.t action=0 -> action=1");
                 return;
             }
-            log("CN SYNC: p0.g.t(Context,String) not found");
+            log("CN SYNC: o0.g.t(Context,String) not found");
         } catch (Throwable e) {
             log("CN SYNC action hook failed: " + e.getClass().getSimpleName());
         }
@@ -154,7 +154,7 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void hookYellowPagePullTask(ClassLoader cl, Context context) {
         try {
-            Class<?> cls = Class.forName("p0.g", false, cl);
+            Class<?> cls = Class.forName("o0.g", false, cl);
             for (Method method : cls.getDeclaredMethods()) {
                 Class<?>[] p = method.getParameterTypes();
                 if (!"y".equals(method.getName())
@@ -168,10 +168,10 @@ public class HookEntry implements IXposedHookLoadPackage {
                         }
                     }
                 });
-                log("PullTask gate hooked: p0.g.y(Context)");
+                log("PullTask gate hooked: o0.g.y(Context)");
                 return;
             }
-            log("PullTask gate p0.g.y(Context) not found");
+            log("PullTask gate o0.g.y(Context) not found");
         } catch (Throwable e) {
             log("PullTask gate hook failed: " + e.getClass().getSimpleName());
         }
@@ -377,7 +377,7 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void hookPullTaskExecution(ClassLoader cl) {
         try {
-            Class<?> cls = Class.forName("p0.g", false, cl);
+            Class<?> cls = Class.forName("o0.g", false, cl);
             log("PullTask class found: " + cls.getName());
 
             for (Method method : cls.getDeclaredMethods()) {
@@ -387,7 +387,7 @@ public class HookEntry implements IXposedHookLoadPackage {
                 XposedBridge.hookMethod(method, new XC_MethodHook() {
                     @Override
                     protected void beforeHookedMethod(MethodHookParam param) {
-                        log("PullTask p0.g ENTER: " + methodName
+                        log("PullTask o0.g ENTER: " + methodName
                                 + " args=" + (param.args == null ? 0 : param.args.length));
                     }
 
@@ -395,15 +395,15 @@ public class HookEntry implements IXposedHookLoadPackage {
                     protected void afterHookedMethod(MethodHookParam param) {
                         if (param.hasThrowable()) {
                             Throwable t = param.getThrowable();
-                            log("PullTask p0.g THROW: " + methodName
+                            log("PullTask o0.g THROW: " + methodName
                                     + " " + t.getClass().getName() + ": " + t.getMessage());
                         } else {
                             Object result = param.getResult();
                             String text = String.valueOf(result);
                             if (text.length() > 300) text = text.substring(0, 300);
-                            log("PullTask p0.g RESULT: " + methodName + "=" + text);
+                            log("PullTask o0.g RESULT: " + methodName + "=" + text);
 
-                            // p0.g.j(...) returns H. The actual network/data work
+                            // o0.g.j(...) returns H. The actual network/data work
                             // appears to continue on that returned object, so hook
                             // its concrete methods when j() returns an object.
                             if ("j".equals(methodName) && result != null) {
@@ -413,7 +413,7 @@ public class HookEntry implements IXposedHookLoadPackage {
                     }
                 });
 
-                log("hooked PullTask p0.g method: " + methodName
+                log("hooked PullTask o0.g method: " + methodName
                         + "(" + method.getParameterTypes().length + " args) -> "
                         + returnType.getSimpleName());
             }
@@ -2865,7 +2865,7 @@ public class HookEntry implements IXposedHookLoadPackage {
             }
 
             try {
-                Class<?> base = Class.forName("p0.d", false, cl);
+                Class<?> base = Class.forName("o0.d", false, cl);
                 Method zMethod = base.getDeclaredMethod(
                         "z", Context.class, String.class, Long.TYPE, Boolean.TYPE);
                 XposedBridge.hookMethod(zMethod, new XC_MethodHook() {
@@ -2880,7 +2880,7 @@ public class HookEntry implements IXposedHookLoadPackage {
                                 + param.thisObject.getClass().getName());
                     }
                 });
-                log("hooked PullPipeline: p0.d.z");
+                log("hooked PullPipeline: o0.d.z");
             } catch (Throwable e) {
                 log("PullPipeline AbstractC0381d.z hook failed: "
                         + e.getClass().getSimpleName());
