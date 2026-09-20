@@ -2387,6 +2387,25 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 
+    private static void hookYellowPageCnHost(ClassLoader cl) {
+        try {
+            Class<?> host = Class.forName("com.miui.yellowpage.utils.P", false, cl);
+            XposedHelpers.findAndHookMethod(
+                    host, "a",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!param.hasThrowable()) {
+                                param.setResult("https://api.huangye.miui.com");
+                            }
+                        }
+                    });
+            log("CN HOST: com.miui.yellowpage.utils.P.a() -> api.huangye.miui.com");
+        } catch (Throwable e) {
+            log("CN HOST hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
     private static void hookYellowPageRegionParam(ClassLoader cl) {
         try {
             Class<?> k0 = Class.forName("com.miui.yellowpage.utils.k0", false, cl);
@@ -3488,6 +3507,7 @@ public class HookEntry implements IXposedHookLoadPackage {
             hookYellowPageWStatus(cl);
             hookYellowPageActualRequestBuilder(cl);
             hookYellowPageRegionParam(cl);
+            hookYellowPageCnHost(cl);
             hookYellowPageDataDecode(cl);
             hookYellowPageDownload(cl);
             hookBooleanContextMethod(
