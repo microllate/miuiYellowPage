@@ -2931,10 +2931,19 @@ hookMeteredNetworkGuard(cl);
                         param.setResult(null);
                         log("PullDaemon: native p0.g.w() finished");
                     } catch (Throwable e) {
+                        Throwable cause = e;
+                        if (e instanceof java.lang.reflect.InvocationTargetException
+                                && ((java.lang.reflect.InvocationTargetException) e).getCause() != null) {
+                            cause = ((java.lang.reflect.InvocationTargetException) e).getCause();
+                        }
                         log("PullDaemon: force p0.g.w failed: "
-                                + e.getClass().getSimpleName() + ": " + String.valueOf(e.getMessage()));
-                    }
-                }
+                                + cause.getClass().getName() + ": " + String.valueOf(cause.getMessage()));
+                        StackTraceElement[] st = cause.getStackTrace();
+                        if (st != null && st.length > 0) {
+                            log("PullDaemon: cause at " + st[0].getClassName() + "."
+                                    + st[0].getMethodName() + ":" + st[0].getLineNumber());
+                        }
+                    }                }
             });
             log("hooked PullTask daemon: o0.d.a(Context,m0.d)");
         } catch (Throwable e) {
