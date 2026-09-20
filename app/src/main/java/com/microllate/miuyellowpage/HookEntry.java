@@ -87,6 +87,35 @@ public class HookEntry implements IXposedHookLoadPackage {
         }
     }
 
+    private static void hookYellowPagePresetRegionGuard(ClassLoader cl) {
+        try {
+            Class<?> build = Class.forName("miui.os.Build", false, cl);
+            Method getRegion = build.getDeclaredMethod("getRegion");
+            XposedBridge.hookMethod(getRegion, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) return;
+
+                    StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+                    for (StackTraceElement frame : stack) {
+                        if ("f0.h".equals(frame.getClassName())
+                                && "a".equals(frame.getMethodName())) {
+                            Object result = param.getResult();
+                            if ("CN".equals(result)) {
+                                param.setResult("IN");
+                                log("PRESET REGION BYPASS: f0.h.a CN -> IN");
+                            }
+                            return;
+                        }
+                    }
+                }
+            });
+            log("hooked miui.os.Build.getRegion() for f0.h.a preset guard");
+        } catch (Throwable e) {
+            log("preset region hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
     private static void hookYellowPageActionZero(ClassLoader cl) {
         try {
             Class<?> pull = Class.forName("o0.g", false, cl);
@@ -3573,6 +3602,7 @@ public class HookEntry implements IXposedHookLoadPackage {
             hookYellowPageActualRequestBuilder(cl);
             hookYellowPageRegionParam(cl);
             hookYellowPageCnHost(cl);
+            hookYellowPagePresetRegionGuard(cl);
             hookYellowPageActionZero(cl);
             hookYellowPageDataDecode(cl);
             hookYellowPageDownload(cl);
