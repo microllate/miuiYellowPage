@@ -3151,6 +3151,27 @@ hookMeteredNetworkGuard(cl);
 
             logOfficialImportPath(context, cl);
 
+            // Directly execute the exact first branch helper used by N(). This avoids
+            // relying on File.exists()/N() hooks that ART may inline.
+            try {
+                Class<?> presetBase = Class.forName("r0.a", false, cl);
+                Object preset = presetBase.getDeclaredConstructor().newInstance();
+                Method presetCheck = presetBase.getDeclaredMethod("l", Context.class);
+                presetCheck.setAccessible(true);
+                Object presetResult = presetCheck.invoke(preset, context);
+                log("OFFICIAL IMPORT DIRECT PRESET CHECK: r0.a.l(Context)="
+                        + String.valueOf(presetResult));
+                Method pathCheck = presetBase.getDeclaredMethod("c", Context.class);
+                pathCheck.setAccessible(true);
+                Object presetFile = pathCheck.invoke(preset, context);
+                log("OFFICIAL IMPORT DIRECT PRESET FILE: "
+                        + String.valueOf(presetFile));
+            } catch (Throwable e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                log("OFFICIAL IMPORT DIRECT PRESET CHECK FAILED: "
+                        + cause.getClass().getName() + ": " + String.valueOf(cause.getMessage()));
+            }
+
             Class<?> helperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
                     false, cl);
