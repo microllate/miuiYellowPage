@@ -8,6 +8,7 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -20,9 +21,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
  * Calls the real YellowPageDatabaseHelper.N() after opening the EEA preset gate.
  *
  * N() first checks r0.c.n().l(context). On the international/EEA build this
- * returns false, so N() exits before it ever reads yellow_pages.dat. The data
- * file can therefore be present and valid while the SQLite database remains
- * unchanged.
+ * returns false, so N() exits before it ever reads yellow_pages.dat.
  */
 public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.yellowpage";
@@ -37,28 +36,68 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         }
     }
 
+    /**
+     * Do not use XposedHelpers.callStaticMethod("n") here.
+     * On this obfuscated build that lookup can throw NoSuchMethodError even
+     * though the zero-argument static method is present. Resolve it directly
+     * from the loaded class and invoke it reflectively.
+     */
+    private Method findZeroArgStatic(Class<?> start, String name) {
+        Class<?> owner = start;
+        while (owner != null && owner != Object.class) {
+            for (Method m : owner.getDeclaredMethods()) {
+                if (name.equals(m.getName())
+                        && m.getParameterTypes().length == 0
+                        && Modifier.isStatic(m.getModifiers())) {
+                    m.setAccessible(true);
+                    return m;
+                }
+            }
+            owner = owner.getSuperclass();
+        }
+        return null;
+    }
+
+    private Method findContextMethod(Class<?> start, String name) {
+        Class<?> owner = start;
+        while (owner != null && owner != Object.class) {
+            for (Method m : owner.getDeclaredMethods()) {
+                Class<?>[] p = m.getParameterTypes();
+                if (name.equals(m.getName())
+                        && p.length == 1
+                        && Context.class.isAssignableFrom(p[0])) {
+                    m.setAccessible(true);
+                    return m;
+                }
+            }
+            owner = owner.getSuperclass();
+        }
+        return null;
+    }
+
     private void forceOfficialPresetGate(ClassLoader cl, Context context) {
         try {
             Class<?> preset = Class.forName("r0.c", false, cl);
-            Object singleton = XposedHelpers.callStaticMethod(preset, "n");
 
-            Class<?> owner = preset;
-            Method gate = null;
-            while (owner != null && owner != Object.class) {
-                try {
-                    gate = owner.getDeclaredMethod("l", Context.class);
-                    break;
-                } catch (NoSuchMethodException ignored) {
-                    owner = owner.getSuperclass();
-                }
+            Method singletonFactory = findZeroArgStatic(preset, "n");
+            if (singletonFactory == null) {
+                log("PRESET GATE: r0.c zero-arg static n() not found; methods="
+                        + preset.getDeclaredMethods().length);
+                return;
             }
 
+            Object singleton = singletonFactory.invoke(null);
+            if (singleton == null) {
+                log("PRESET GATE: r0.c.n() returned null");
+                return;
+            }
+
+            Method gate = findContextMethod(preset, "l");
             if (gate == null) {
                 log("PRESET GATE: r0.c.n().l(Context) not found");
                 return;
             }
 
-            gate.setAccessible(true);
             XposedBridge.hookMethod(gate, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam param) {
@@ -68,7 +107,8 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
                 }
             });
 
-            log("PRESET GATE HOOKED: " + owner.getName() + ".l(Context) -> true");
+            log("PRESET GATE HOOKED: " + gate.getDeclaringClass().getName()
+                    + "." + gate.getName() + "(Context) -> true");
 
             Object result = gate.invoke(singleton, context);
             log("PRESET GATE VERIFY: r0.c.n().l(Context)=" + String.valueOf(result));
@@ -99,7 +139,6 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         try {
             ClassLoader cl = app.getClassLoader();
 
-            // This is the missing EEA bypass. Install it BEFORE N().
             forceOfficialPresetGate(cl, app);
 
             Class<?> helperClass = Class.forName(
