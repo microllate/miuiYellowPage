@@ -1,9 +1,10 @@
 package com.microllate.miuyellowpage;
 
 import android.content.Context;
+import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
-import android.util.Log;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -16,6 +17,8 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.yellowpage";
     private static final String TAG = "miu-iYellowPage";
+    private static final String DATA_DIR = "yellowpage";
+    private static final String DATA_FILE = "yellow_pages.dat";
     private final AtomicBoolean importing = new AtomicBoolean(false);
 
     private void log(String s) {
@@ -33,7 +36,7 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
 
         if (!importPresetData(app)) return;
 
-        java.io.File dataFile = new java.io.File(app.getFilesDir(), "yellowpage/yellow_pages.dat");
+        File dataFile = new File(new File(app.getFilesDir(), DATA_DIR), DATA_FILE);
         if (!dataFile.isFile() || dataFile.length() <= 0) {
             log("preset file missing: " + dataFile.getAbsolutePath());
             return;
@@ -77,20 +80,16 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             singleton.setAccessible(true);
             Object preset = singleton.invoke(null);
 
-            Method k = presetClass.getMethod("k");
-            int resId = ((Number) k.invoke(preset)).intValue();
             Method p = presetClass.getMethod("p", Context.class);
-            Object result = p.invoke(preset, context);
-            boolean ok = Boolean.TRUE.equals(result);
+            boolean ok = Boolean.TRUE.equals(p.invoke(preset, context));
 
             Method d = presetClass.getMethod("d");
             Method f = presetClass.getMethod("f");
-            java.io.File data = new java.io.File(
-                    new java.io.File(context.getFilesDir(), String.valueOf(f.invoke(preset))),
+            File data = new File(
+                    new File(context.getFilesDir(), String.valueOf(f.invoke(preset))),
                     String.valueOf(d.invoke(preset)));
 
-            log("preset p(): resId=" + resId + ", ok=" + ok
-                    + ", data=" + data.exists() + "/" + data.length());
+            log("preset p(): ok=" + ok + ", data=" + data.exists() + "/" + data.length());
             return ok;
         } catch (Throwable e) {
             Throwable t = e.getCause() != null ? e.getCause() : e;
