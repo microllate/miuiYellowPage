@@ -17,26 +17,16 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Uses the YellowPage APK's own importer instead of reimplementing its
- * yellow_pages.dat parser.
+ * Calls the real YellowPageDatabaseHelper.N() after opening the EEA preset gate.
  *
- * Official flow:
- *   downloaded yellow_pages.dat
- *       -> YellowPageReleaseTask / p0.d.n()
- *       -> YellowPageDatabaseHelper.N()
- *       -> YellowPage.fromJson()
- *       -> yellow_page
- *       -> g0.g.f()
- *       -> phone_lookup
- *
- * EEA normally does not schedule/execute the release task reliably, so this
- * hook calls the exact official N() method after a successful data download
- * and once at Provider startup when the file is already present.
+ * N() first checks r0.c.n().l(context). On the international/EEA build this
+ * returns false, so N() exits before it ever reads yellow_pages.dat. The data
+ * file can therefore be present and valid while the SQLite database remains
+ * unchanged.
  */
 public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.yellowpage";
     private static final String TAG = "miu-iYellowPage";
-
     private final AtomicBoolean importing = new AtomicBoolean(false);
 
     private void log(String message) {
@@ -44,6 +34,48 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         try {
             XposedBridge.log(TAG + ": OFFICIAL IMPORT FIX: " + message);
         } catch (Throwable ignored) {
+        }
+    }
+
+    private void forceOfficialPresetGate(ClassLoader cl, Context context) {
+        try {
+            Class<?> preset = Class.forName("r0.c", false, cl);
+            Object singleton = XposedHelpers.callStaticMethod(preset, "n");
+
+            Class<?> owner = preset;
+            Method gate = null;
+            while (owner != null && owner != Object.class) {
+                try {
+                    gate = owner.getDeclaredMethod("l", Context.class);
+                    break;
+                } catch (NoSuchMethodException ignored) {
+                    owner = owner.getSuperclass();
+                }
+            }
+
+            if (gate == null) {
+                log("PRESET GATE: r0.c.n().l(Context) not found");
+                return;
+            }
+
+            gate.setAccessible(true);
+            XposedBridge.hookMethod(gate, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!param.hasThrowable()) {
+                        param.setResult(true);
+                    }
+                }
+            });
+
+            log("PRESET GATE HOOKED: " + owner.getName() + ".l(Context) -> true");
+
+            Object result = gate.invoke(singleton, context);
+            log("PRESET GATE VERIFY: r0.c.n().l(Context)=" + String.valueOf(result));
+        } catch (Throwable e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            log("PRESET GATE FAILED: " + cause.getClass().getName()
+                    + ": " + String.valueOf(cause.getMessage()));
         }
     }
 
@@ -66,6 +98,9 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
 
         try {
             ClassLoader cl = app.getClassLoader();
+
+            // This is the missing EEA bypass. Install it BEFORE N().
+            forceOfficialPresetGate(cl, app);
 
             Class<?> helperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
@@ -157,8 +192,7 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private void hookDownload(ClassLoader cl) {
         try {
             Class<?> pull = Class.forName("p0.d", false, cl);
-            Method n = pull.getDeclaredMethod(
-                    "n", Context.class, JSONObject.class);
+            Method n = pull.getDeclaredMethod("n", Context.class, JSONObject.class);
 
             XposedBridge.hookMethod(n, new XC_MethodHook() {
                 @Override
@@ -174,9 +208,6 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
                             && param.args.length > 0
                             && param.args[0] instanceof Context
                             ? (Context) param.args[0] : null;
-
-                    // n() returns only after q() has committed the downloaded
-                    // file to files/yellowpage/yellow_pages.dat.
                     importOfficial(context, "p0.d.n_after_download");
                 }
             });
@@ -217,7 +248,6 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         if (!PACKAGE.equals(lpparam.packageName)) return;
 
         log("loaded");
-
         hookProvider(lpparam.classLoader);
         hookDownload(lpparam.classLoader);
         hookReleaseTask(lpparam.classLoader);
