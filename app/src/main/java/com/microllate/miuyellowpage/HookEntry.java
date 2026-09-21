@@ -23,6 +23,14 @@ public class HookEntry implements IXposedHookLoadPackage {
     private static final String TAG = "miu-iYellowPage";
 
     // Marks execution inside the official YellowPageDatabaseHelper.N import method.
+    private static final ThreadLocal<Integer> OFFICIAL_IMPORT_FROM_JSON_COUNT =
+            new ThreadLocal<Integer>() {
+                @Override
+                protected Integer initialValue() {
+                    return 0;
+                }
+            };
+
     private static final ThreadLocal<Integer> OFFICIAL_IMPORT_DEPTH =
             new ThreadLocal<Integer>() {
                 @Override
@@ -2921,6 +2929,62 @@ hookMeteredNetworkGuard(cl);
 
 
 
+    private static void hookOfficialImportExecution(ClassLoader cl) {
+        try {
+            Class<?> yp = Class.forName("miui.yellowpage.YellowPage", false, cl);
+            for (Method method : yp.getDeclaredMethods()) {
+                if (!"fromJson".equals(method.getName())
+                        || method.getParameterTypes().length != 1
+                        || method.getParameterTypes()[0] != String.class
+                        || method.getReturnType() != yp) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.hasThrowable() || !isInsideOfficialImport()) return;
+                        Integer n = OFFICIAL_IMPORT_FROM_JSON_COUNT.get();
+                        n = n == null ? 1 : n + 1;
+                        OFFICIAL_IMPORT_FROM_JSON_COUNT.set(n);
+                        if (n <= 3) {
+                            String line = param.args != null && param.args.length > 0
+                                    ? String.valueOf(param.args[0]) : "";
+                            log("OFFICIAL IMPORT FROMJSON: count=" + n
+                                    + " length=" + line.length());
+                        }
+                    }
+                });
+                break;
+            }
+
+            for (Method method : SQLiteDatabase.class.getDeclaredMethods()) {
+                if (!"insertWithOnConflict".equals(method.getName())
+                        || method.getParameterTypes().length != 4
+                        || method.getReturnType() != Long.TYPE) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.hasThrowable() || !isInsideOfficialImport()) return;
+                        String table = param.args != null && param.args.length > 0
+                                ? String.valueOf(param.args[0]) : "null";
+                        if ("yellow_page".equals(table)) {
+                            log("OFFICIAL IMPORT INSERT: table=yellow_page result="
+                                    + String.valueOf(param.getResult()));
+                        }
+                    }
+                });
+                break;
+            }
+
+            log("OFFICIAL IMPORT EXECUTION TRACE INSTALLED");
+        } catch (Throwable e) {
+            log("OFFICIAL IMPORT EXECUTION TRACE FAILED: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
     private static void hookOfficialImportFileChecks(ClassLoader cl) {
         try {
             // r0.a.l/c() are tiny methods and may be ART-inlined.
@@ -2997,7 +3061,10 @@ hookMeteredNetworkGuard(cl);
 
     private static void triggerOfficialYellowPageImport(Context context, ClassLoader cl) {
         try {
+            hookOfficialImportExecution(cl);
             hookOfficialImportFileChecks(cl);
+
+            OFFICIAL_IMPORT_FROM_JSON_COUNT.set(0);
 
             Class<?> helperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
@@ -3055,7 +3122,8 @@ hookMeteredNetworkGuard(cl);
             importMethod.setAccessible(true);
             log("OFFICIAL IMPORT ENTER: YellowPageDatabaseHelper.N(Context,SQLiteDatabase)");
             importMethod.invoke(helper, context, db);
-            log("OFFICIAL IMPORT RESULT: N returned");
+            Integer imported = OFFICIAL_IMPORT_FROM_JSON_COUNT.get();
+            log("OFFICIAL IMPORT RESULT: N returned fromJson=" + String.valueOf(imported));
         } catch (Throwable e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             log("OFFICIAL IMPORT FAILED: " + cause.getClass().getName()
