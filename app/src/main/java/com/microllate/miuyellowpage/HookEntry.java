@@ -2435,7 +2435,7 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void logDatabaseStats(Context context, ClassLoader cl, String stage) {
         try {
-            Class<?> dbHelperClass = Class.forName(
+            hookOfficialImportFileChecks(cl);\n\n            Class<?> dbHelperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
                     false, cl);
             Object helper = XposedHelpers.callStaticMethod(dbHelperClass, "E", context);
@@ -2905,6 +2905,68 @@ hookMeteredNetworkGuard(cl);
 
 
 
+
+    private static void hookOfficialImportFileChecks(ClassLoader cl) {
+        try {
+            Class<?> fileProvider = Class.forName("r0.a", false, cl);
+
+            for (Method method : fileProvider.getDeclaredMethods()) {
+                if ("l".equals(method.getName())
+                        && method.getReturnType() == Boolean.TYPE
+                        && method.getParameterTypes().length == 1
+                        && method.getParameterTypes()[0] == Context.class) {
+                    XposedBridge.hookMethod(method, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (param.hasThrowable()) return;
+                            if (!isInsideOfficialImport()) return;
+                            log("OFFICIAL IMPORT CHECK: r0.a.l(Context)="
+                                    + param.getResult());
+                        }
+                    });
+                    log("hooked official import check: r0.a.l(Context)");
+                }
+
+                if ("c".equals(method.getName())
+                        && method.getReturnType() == java.io.File.class
+                        && method.getParameterTypes().length == 1
+                        && method.getParameterTypes()[0] == Context.class) {
+                    XposedBridge.hookMethod(method, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (param.hasThrowable()) return;
+                            if (!isInsideOfficialImport()) return;
+                            Object result = param.getResult();
+                            java.io.File file = result instanceof java.io.File
+                                    ? (java.io.File) result : null;
+                            log("OFFICIAL IMPORT PATH: r0.a.c(Context)="
+                                    + (file == null ? "null" : file.getAbsolutePath())
+                                    + " exists=" + (file != null && file.exists())
+                                    + " length=" + (file == null ? -1 : file.length()));
+                        }
+                    });
+                    log("hooked official import path: r0.a.c(Context)");
+                }
+            }
+        } catch (Throwable e) {
+            log("official import file-check hooks failed: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+    private static boolean isInsideOfficialImport() {
+        try {
+            for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
+                if ("com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper"
+                        .equals(frame.getClassName())
+                        && "N".equals(frame.getMethodName())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
 
     private static void triggerOfficialYellowPageImport(Context context, ClassLoader cl) {
         try {
