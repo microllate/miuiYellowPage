@@ -8,6 +8,8 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -17,14 +19,12 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Calls the real YellowPageDatabaseHelper.N() after bypassing the actual
- * preset gate used by this APK.
+ * Calls the real YellowPageDatabaseHelper.N() after bypassing the preset gate.
  *
- * Reverse engineering shows the gate method is declared by r0.a, not r0.c.
- * r0.c is a concrete provider/subclass. N() reaches the inherited
- * r0.a.l(Context), so hooking r0.a.l(Context) directly avoids both:
- *   - resolving r0.c.n()
- *   - constructing r0.a (which has no no-arg constructor)
+ * This APK has multiple generations of the obfuscated r0.a base class:
+ * older decompilations expose l(Context), while the current EEA APK exposes
+ * k(Context). Therefore hook every matching boolean Context gate on r0.a and
+ * report the exact method names found, rather than assuming l().
  */
 public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.yellowpage";
@@ -39,39 +39,40 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         }
     }
 
-    private Method findPresetGate(ClassLoader cl) throws ClassNotFoundException {
-        Class<?> presetBase = Class.forName("r0.a", false, cl);
-        for (Method method : presetBase.getDeclaredMethods()) {
-            if (!"l".equals(method.getName())
-                    || method.getReturnType() != Boolean.TYPE
-                    || method.getParameterTypes().length != 1
-                    || method.getParameterTypes()[0] != Context.class) {
-                continue;
+    private List<Method> findContextBooleanMethods(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> base = Class.forName("r0.a", false, cl);
+        List<Method> result = new ArrayList<>();
+        for (Method method : base.getDeclaredMethods()) {
+            if (method.getReturnType() == Boolean.TYPE
+                    && method.getParameterTypes().length == 1
+                    && method.getParameterTypes()[0] == Context.class) {
+                method.setAccessible(true);
+                result.add(method);
             }
-            method.setAccessible(true);
-            return method;
         }
-        return null;
+        return result;
     }
 
     private void forceOfficialPresetGate(ClassLoader cl) {
         try {
-            Method gate = findPresetGate(cl);
-            if (gate == null) {
-                log("PRESET GATE FAILED: r0.a.l(Context) not found");
+            List<Method> gates = findContextBooleanMethods(cl);
+            if (gates.isEmpty()) {
+                log("PRESET GATE FAILED: r0.a has no boolean(Context) method");
                 return;
             }
 
-            XposedBridge.hookMethod(gate, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (!param.hasThrowable()) {
-                        param.setResult(true);
+            for (final Method gate : gates) {
+                XposedBridge.hookMethod(gate, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (!param.hasThrowable()) {
+                            param.setResult(true);
+                        }
                     }
-                }
-            });
-
-            log("PRESET GATE HOOKED: r0.a.l(Context) -> true");
+                });
+                log("PRESET GATE HOOKED: r0.a."
+                        + gate.getName() + "(Context) -> true");
+            }
         } catch (Throwable e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             log("PRESET GATE FAILED: " + cause.getClass().getName()
@@ -99,7 +100,6 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         try {
             ClassLoader cl = app.getClassLoader();
 
-            // Hook the real gate before executing N().
             forceOfficialPresetGate(cl);
 
             Class<?> helperClass = Class.forName(
