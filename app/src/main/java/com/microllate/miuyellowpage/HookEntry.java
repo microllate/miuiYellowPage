@@ -22,6 +22,15 @@ public class HookEntry implements IXposedHookLoadPackage {
     private static final String YELLOWPAGE = "com.miui.yellowpage";
     private static final String TAG = "miu-iYellowPage";
 
+    // Marks execution inside the official YellowPageDatabaseHelper.N import method.
+    private static final ThreadLocal<Integer> OFFICIAL_IMPORT_DEPTH =
+            new ThreadLocal<Integer>() {
+                @Override
+                protected Integer initialValue() {
+                    return 0;
+                }
+            };
+
     private static void log(String message) {
         // Import investigation only: suppress all already-proven acquisition/startup logs.
         if (message == null || !message.startsWith("OFFICIAL IMPORT")) {
@@ -2914,6 +2923,41 @@ hookMeteredNetworkGuard(cl);
 
     private static void hookOfficialImportFileChecks(ClassLoader cl) {
         try {
+            // Use the actual N() execution as the scope marker. The previous
+            // stack-trace test was too fragile for Xposed callback stacks and
+            // caused the l()/c() diagnostics to disappear.
+            Class<?> helperClass = Class.forName(
+                    "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
+                    false, cl);
+
+            for (Method method : helperClass.getDeclaredMethods()) {
+                if (!"N".equals(method.getName())
+                        || method.getParameterTypes().length != 2
+                        || method.getParameterTypes()[0] != Context.class
+                        || method.getParameterTypes()[1] != SQLiteDatabase.class) {
+                    continue;
+                }
+
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        Integer depth = OFFICIAL_IMPORT_DEPTH.get();
+                        OFFICIAL_IMPORT_DEPTH.set(depth == null ? 1 : depth + 1);
+                    }
+
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        Integer depth = OFFICIAL_IMPORT_DEPTH.get();
+                        if (depth == null || depth <= 1) {
+                            OFFICIAL_IMPORT_DEPTH.set(0);
+                        } else {
+                            OFFICIAL_IMPORT_DEPTH.set(depth - 1);
+                        }
+                    }
+                });
+                break;
+            }
+
             Class<?> fileProvider = Class.forName("r0.a", false, cl);
 
             for (Method method : fileProvider.getDeclaredMethods()) {
@@ -2930,7 +2974,6 @@ hookMeteredNetworkGuard(cl);
                                     + param.getResult());
                         }
                     });
-                    log("hooked official import check: r0.a.l(Context)");
                 }
 
                 if ("c".equals(method.getName())
@@ -2951,27 +2994,21 @@ hookMeteredNetworkGuard(cl);
                                     + " length=" + (file == null ? -1 : file.length()));
                         }
                     });
-                    log("hooked official import path: r0.a.c(Context)");
                 }
             }
         } catch (Throwable e) {
-            log("official import file-check hooks failed: "
+            log("OFFICIAL IMPORT FILE TRACE FAILED: "
                     + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
         }
     }
 
     private static boolean isInsideOfficialImport() {
         try {
-            for (StackTraceElement frame : Thread.currentThread().getStackTrace()) {
-                if ("com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper"
-                        .equals(frame.getClassName())
-                        && "N".equals(frame.getMethodName())) {
-                    return true;
-                }
-            }
+            Integer depth = OFFICIAL_IMPORT_DEPTH.get();
+            return depth != null && depth > 0;
         } catch (Throwable ignored) {
+            return false;
         }
-        return false;
     }
 
     private static void triggerOfficialYellowPageImport(Context context, ClassLoader cl) {
@@ -3297,12 +3334,3 @@ hookYellowPageDownload(cl);
             Class<?> dbHelperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
                     false, cl);
-
-            installProviderHooks(cl, dbHelperClass);
-        } catch (Throwable e) {
-            log("YellowPage initialization failed: "
-                    + e.getClass().getSimpleName());
-        }
-    }
-}
-
