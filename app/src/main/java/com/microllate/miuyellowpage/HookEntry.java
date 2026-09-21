@@ -3087,6 +3087,29 @@ hookMeteredNetworkGuard(cl);
         }
     }
 
+    private static void logOfficialImportPath(Context context, ClassLoader cl) {
+        try {
+            Class<?> pathProviderClass = Class.forName("p0.g", false, cl);
+            Object pathProvider = pathProviderClass.getDeclaredConstructor().newInstance();
+            Method pathMethod = pathProviderClass.getDeclaredMethod("c", Context.class);
+            pathMethod.setAccessible(true);
+            Object result = pathMethod.invoke(pathProvider, context);
+            if (!(result instanceof java.io.File)) {
+                log("OFFICIAL IMPORT PATH RESULT: "
+                        + (result == null ? "null" : result.getClass().getName()));
+                return;
+            }
+            java.io.File file = (java.io.File) result;
+            log("OFFICIAL IMPORT PATH: " + file.getAbsolutePath());
+            log("OFFICIAL IMPORT EXISTS: " + file.exists());
+            log("OFFICIAL IMPORT LENGTH: " + file.length());
+        } catch (Throwable e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            log("OFFICIAL IMPORT PATH FAILED: " + cause.getClass().getName()
+                    + ": " + String.valueOf(cause.getMessage()));
+        }
+    }
+
     private static void triggerOfficialYellowPageImport(Context context, ClassLoader cl) {
         try {
             hookOfficialImportExecution(cl);
@@ -3094,6 +3117,8 @@ hookMeteredNetworkGuard(cl);
             hookOfficialImportFileChecks(cl);
 
             OFFICIAL_IMPORT_FROM_JSON_COUNT.set(0);
+
+            logOfficialImportPath(context, cl);
 
             Class<?> helperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
