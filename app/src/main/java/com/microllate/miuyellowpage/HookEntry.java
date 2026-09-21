@@ -2905,6 +2905,73 @@ hookMeteredNetworkGuard(cl);
 
 
 
+
+    private static void triggerOfficialYellowPageImport(Context context, ClassLoader cl) {
+        try {
+            Class<?> helperClass = Class.forName(
+                    "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
+                    false, cl);
+
+            Method getInstance = null;
+            for (Method m : helperClass.getDeclaredMethods()) {
+                if (!Modifier.isStatic(m.getModifiers())
+                        || m.getParameterTypes().length != 1
+                        || m.getParameterTypes()[0] != Context.class
+                        || !helperClass.isAssignableFrom(m.getReturnType())) {
+                    continue;
+                }
+                if ("E".equals(m.getName())) {
+                    getInstance = m;
+                    break;
+                }
+            }
+            if (getInstance == null) {
+                log("OFFICIAL IMPORT: YellowPageDatabaseHelper.E(Context) not found");
+                return;
+            }
+
+            getInstance.setAccessible(true);
+            Object helper = getInstance.invoke(null, context);
+            if (helper == null) {
+                log("OFFICIAL IMPORT: helper is null");
+                return;
+            }
+
+            Method getWritableDatabase = helperClass.getMethod("getWritableDatabase");
+            Object db = getWritableDatabase.invoke(helper);
+            if (!(db instanceof SQLiteDatabase)) {
+                log("OFFICIAL IMPORT: getWritableDatabase() returned "
+                        + (db == null ? "null" : db.getClass().getName()));
+                return;
+            }
+
+            Method importMethod = null;
+            for (Method m : helperClass.getDeclaredMethods()) {
+                if (!"N".equals(m.getName())
+                        || m.getParameterTypes().length != 2
+                        || m.getParameterTypes()[0] != Context.class
+                        || m.getParameterTypes()[1] != SQLiteDatabase.class) {
+                    continue;
+                }
+                importMethod = m;
+                break;
+            }
+            if (importMethod == null) {
+                log("OFFICIAL IMPORT: YellowPageDatabaseHelper.N(Context,SQLiteDatabase) not found");
+                return;
+            }
+
+            importMethod.setAccessible(true);
+            log("OFFICIAL IMPORT ENTER: YellowPageDatabaseHelper.N(Context,SQLiteDatabase)");
+            importMethod.invoke(helper, context, db);
+            log("OFFICIAL IMPORT RESULT: N returned");
+        } catch (Throwable e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            log("OFFICIAL IMPORT FAILED: " + cause.getClass().getName()
+                    + ": " + String.valueOf(cause.getMessage()));
+        }
+    }
+
     private static void hookYellowPageDaemon(ClassLoader cl) {
         try {
             Class<?> daemon = Class.forName("o0.d", false, cl);
@@ -3015,6 +3082,8 @@ hookMeteredNetworkGuard(cl);
                             log("CN DIRECT DOWNLOAD OK: bytes=" + total
                                     + " md5=" + md5
                                     + " target=" + target.getAbsolutePath());
+
+                            triggerOfficialYellowPageImport(context, cl);
 
                             param.setResult(null);
                         } finally {
