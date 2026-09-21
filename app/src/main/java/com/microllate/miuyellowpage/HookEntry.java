@@ -23,6 +23,10 @@ public class HookEntry implements IXposedHookLoadPackage {
     private static final String TAG = "miu-iYellowPage";
 
     private static void log(String message) {
+        // Import investigation only: suppress all already-proven acquisition/startup logs.
+        if (message == null || !message.startsWith("OFFICIAL IMPORT")) {
+            return;
+        }
         Log.i(TAG, message);
         try {
             XposedBridge.log(TAG + ": " + message);
