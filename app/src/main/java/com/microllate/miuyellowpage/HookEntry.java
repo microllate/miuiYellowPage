@@ -2457,6 +2457,7 @@ public class HookEntry implements IXposedHookLoadPackage {
     private static void logDatabaseStats(Context context, ClassLoader cl, String stage) {
         try {
             hookOfficialImportFileChecks(cl);
+            hookOfficialImportPresetCheck(cl);
 
             Class<?> dbHelperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
@@ -3074,6 +3075,33 @@ hookMeteredNetworkGuard(cl);
             }
         } catch (Throwable e) {
             log("OFFICIAL IMPORT FILE TRACE FAILED: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+    private static void hookOfficialImportPresetCheck(ClassLoader cl) {
+        try {
+            Class<?> presetBase = Class.forName("r0.a", false, cl);
+            for (Method method : presetBase.getDeclaredMethods()) {
+                if (!"l".equals(method.getName())
+                        || method.getReturnType() != Boolean.TYPE
+                        || method.getParameterTypes().length != 1
+                        || method.getParameterTypes()[0] != Context.class) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (!isInsideOfficialImport() || param.hasThrowable()) return;
+                        log("OFFICIAL IMPORT PRESET CHECK: r0.a.l(Context)="
+                                + String.valueOf(param.getResult()));
+                    }
+                });
+                log("OFFICIAL IMPORT PRESET CHECK HOOK INSTALLED");
+                break;
+            }
+        } catch (Throwable e) {
+            log("OFFICIAL IMPORT PRESET CHECK HOOK FAILED: "
                     + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
         }
     }
