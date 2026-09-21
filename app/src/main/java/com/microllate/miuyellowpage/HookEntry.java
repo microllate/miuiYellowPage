@@ -3092,7 +3092,9 @@ hookMeteredNetworkGuard(cl);
                 XposedBridge.hookMethod(method, new XC_MethodHook() {
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) {
-                        if (!isInsideOfficialImport() || param.hasThrowable()) return;
+                        if (param.hasThrowable()) return;
+                        // Do not depend on N's ThreadLocal scope here: this is the
+                        // first branch inside N and ART may inline surrounding code.
                         log("OFFICIAL IMPORT PRESET CHECK: r0.a.l(Context)="
                                 + String.valueOf(param.getResult()));
                     }
