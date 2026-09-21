@@ -246,6 +246,7 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         // POCO F5 Pro; YellowPage may branch on Build.* identity as well as region.
         try {
             Class<?> androidBuild = Class.forName("android.os.Build", false, ClassLoader.getSystemClassLoader());
+            log("CN ENV ORIGINAL Build: MODEL=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "MODEL")) + " DEVICE=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "DEVICE")) + " PRODUCT=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "PRODUCT")) + " BRAND=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "BRAND")) + " MANUFACTURER=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "MANUFACTURER")) + " DISPLAY=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "DISPLAY")));
             setStaticString(androidBuild, "MODEL", "23013PC75C");
             setStaticString(androidBuild, "DEVICE", "mondrian");
             setStaticString(androidBuild, "PRODUCT", "mondrian");
@@ -281,8 +282,12 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
                     @Override protected void afterHookedMethod(MethodHookParam p) {
                         if (!p.hasThrowable()) {
                             String key = (String) p.args[0];
-                            String value = cnProperty(key, (String) p.getResult());
-                            if (value != null) p.setResult(value);
+                            String original = (String) p.getResult();
+                            String value = cnProperty(key, original);
+                            if (value != null) {
+                                log("CN ENV READ: " + className + ".get key=" + key + " original=" + String.valueOf(original) + " -> " + value);
+                                p.setResult(value);
+                            }
                         }
                     }
                 });
@@ -294,8 +299,12 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
                             @Override protected void afterHookedMethod(MethodHookParam p) {
                                 if (!p.hasThrowable()) {
                                     String key = (String) p.args[0];
-                                    String value = cnProperty(key, (String) p.getResult());
-                                    if (value != null) p.setResult(value);
+                                    String original = (String) p.getResult();
+                                    String value = cnProperty(key, original);
+                                    if (value != null) {
+                                        log("CN ENV READ: " + className + ".get(default) key=" + key + " original=" + String.valueOf(original) + " -> " + value);
+                                        p.setResult(value);
+                                    }
                                 }
                             }
                         });
