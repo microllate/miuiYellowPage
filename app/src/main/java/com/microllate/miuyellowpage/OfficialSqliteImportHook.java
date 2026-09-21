@@ -17,12 +17,14 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Calls the real YellowPageDatabaseHelper.N() after bypassing the EEA preset gate.
+ * Calls the real YellowPageDatabaseHelper.N() after bypassing the actual
+ * preset gate used by this APK.
  *
- * N() first checks r0.c.n().l(context). We do NOT call r0.c.n() ourselves:
- * we hook the actual l(Context) method directly. Therefore the original
- * r0.c.n().l(context) call made inside N() is forced to true regardless of
- * how the obfuscated singleton factory is resolved by reflection helpers.
+ * Reverse engineering shows the gate method is declared by r0.a, not r0.c.
+ * r0.c is a concrete provider/subclass. N() reaches the inherited
+ * r0.a.l(Context), so hooking r0.a.l(Context) directly avoids both:
+ *   - resolving r0.c.n()
+ *   - constructing r0.a (which has no no-arg constructor)
  */
 public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.yellowpage";
@@ -37,32 +39,26 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         }
     }
 
-    private Method findContextMethod(Class<?> start, String name) {
-        Class<?> owner = start;
-        while (owner != null && owner != Object.class) {
-            for (Method m : owner.getDeclaredMethods()) {
-                Class<?>[] p = m.getParameterTypes();
-                if (name.equals(m.getName())
-                        && p.length == 1
-                        && Context.class.isAssignableFrom(p[0])) {
-                    m.setAccessible(true);
-                    return m;
-                }
+    private Method findPresetGate(ClassLoader cl) throws ClassNotFoundException {
+        Class<?> presetBase = Class.forName("r0.a", false, cl);
+        for (Method method : presetBase.getDeclaredMethods()) {
+            if (!"l".equals(method.getName())
+                    || method.getReturnType() != Boolean.TYPE
+                    || method.getParameterTypes().length != 1
+                    || method.getParameterTypes()[0] != Context.class) {
+                continue;
             }
-            owner = owner.getSuperclass();
+            method.setAccessible(true);
+            return method;
         }
         return null;
     }
 
     private void forceOfficialPresetGate(ClassLoader cl) {
         try {
-            Class<?> preset = Class.forName("r0.c", false, cl);
-
-            // Do not resolve/call r0.c.n(). This is the point where the
-            // previous implementation hit NoSuchMethodError.
-            Method gate = findContextMethod(preset, "l");
+            Method gate = findPresetGate(cl);
             if (gate == null) {
-                log("PRESET GATE FAILED: r0.c.l(Context) not found");
+                log("PRESET GATE FAILED: r0.a.l(Context) not found");
                 return;
             }
 
@@ -75,8 +71,7 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
                 }
             });
 
-            log("PRESET GATE HOOKED: " + gate.getDeclaringClass().getName()
-                    + ".l(Context) -> true");
+            log("PRESET GATE HOOKED: r0.a.l(Context) -> true");
         } catch (Throwable e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             log("PRESET GATE FAILED: " + cause.getClass().getName()
@@ -104,21 +99,24 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         try {
             ClassLoader cl = app.getClassLoader();
 
-            // Make the original N() see the EEA preset as available.
+            // Hook the real gate before executing N().
             forceOfficialPresetGate(cl);
 
             Class<?> helperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
                     false, cl);
 
-            Object helper = XposedHelpers.callStaticMethod(helperClass, "E", app);
+            Method getInstance = helperClass.getDeclaredMethod("E", Context.class);
+            getInstance.setAccessible(true);
+            Object helper = getInstance.invoke(null, app);
             if (helper == null) {
                 log("FAILED: YellowPageDatabaseHelper.E() returned null");
                 return;
             }
 
-            SQLiteDatabase db = (SQLiteDatabase) XposedHelpers.callMethod(
-                    helper, "getWritableDatabase");
+            Method getWritable = helperClass.getMethod("getWritableDatabase");
+            getWritable.setAccessible(true);
+            SQLiteDatabase db = (SQLiteDatabase) getWritable.invoke(helper);
             if (db == null) {
                 log("FAILED: getWritableDatabase() returned null");
                 return;
