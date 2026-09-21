@@ -19,7 +19,11 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private final AtomicBoolean importing = new AtomicBoolean(false);
 
     private void log(String s) {
-        Log.i(TAG, "OFFICIAL IMPORT: " + s);
+        String msg = TAG + ": OFFICIAL IMPORT: " + s;
+        try {
+            XposedBridge.log(msg);
+        } catch (Throwable ignored) {
+        }
     }
 
     private void importOfficial(Context context, String reason) {
