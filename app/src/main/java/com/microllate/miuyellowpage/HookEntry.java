@@ -2929,6 +2929,34 @@ hookMeteredNetworkGuard(cl);
 
 
 
+    private static void hookOfficialImportOfficialLog(ClassLoader cl) {
+        try {
+            Class<?> logClass = Class.forName("miui.yellowpage.Log", false, cl);
+            for (Method method : logClass.getDeclaredMethods()) {
+                if (!"d".equals(method.getName())
+                        || method.getParameterTypes().length != 2
+                        || method.getParameterTypes()[0] != String.class
+                        || method.getParameterTypes()[1] != String.class) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        if (!isInsideOfficialImport()) return;
+                        String msg = String.valueOf(param.args[1]);
+                        if (msg.contains("importYellowPage()")) {
+                            log("OFFICIAL IMPORT APK LOG: " + msg);
+                        }
+                    }
+                });
+                break;
+            }
+        } catch (Throwable e) {
+            log("OFFICIAL IMPORT APK LOG HOOK FAILED: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
     private static void hookOfficialImportExecution(ClassLoader cl) {
         try {
             Class<?> yp = Class.forName("miui.yellowpage.YellowPage", false, cl);
@@ -3062,6 +3090,7 @@ hookMeteredNetworkGuard(cl);
     private static void triggerOfficialYellowPageImport(Context context, ClassLoader cl) {
         try {
             hookOfficialImportExecution(cl);
+            hookOfficialImportOfficialLog(cl);
             hookOfficialImportFileChecks(cl);
 
             OFFICIAL_IMPORT_FROM_JSON_COUNT.set(0);
