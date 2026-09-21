@@ -2905,12 +2905,12 @@ hookMeteredNetworkGuard(cl);
 
 
 
-    private static void hookCnYellowPageDirectBootstrap(ClassLoader cl) {
+    private static void hookYellowPageDaemon(ClassLoader cl) {
         try {
-            Class<?> pullBase = Class.forName("p0.d", false, cl);
-            Class<?> pullClass = Class.forName("p0.g", false, cl);
-            Class<?> configClass = Class.forName("m0.d", false, cl);
-            Method run = pullBase.getDeclaredMethod("a", Context.class, configClass);
+            Class<?> daemon = Class.forName("o0.d", false, cl);
+            Class<?> config = Class.forName("m0.d", false, cl);
+            Class<?> pull = Class.forName("p0.g", false, cl);
+            Method run = daemon.getDeclaredMethod("a", Context.class, config);
 
             final String bootstrapResponse =
                     "{"
@@ -2933,78 +2933,34 @@ hookMeteredNetworkGuard(cl);
                 protected void beforeHookedMethod(MethodHookParam param) {
                     try {
                         Context context = (Context) param.args[0];
-
-                        Object task = pullClass.getDeclaredConstructor().newInstance();
-                        Method responseHandler = pullClass.getDeclaredMethod(
-                                "r", Context.class, String.class);
+                        Object task = pull.getDeclaredConstructor().newInstance();
+                        Method responseHandler =
+                                pull.getDeclaredMethod("r", Context.class, String.class);
                         responseHandler.setAccessible(true);
 
-                        log("CN DIRECT BOOTSTRAP: bypass H.w status gate");
+                        log("CN DIRECT DOWNLOAD: bypass p0.g.w/H.w status gate");
                         responseHandler.invoke(task, context, bootstrapResponse);
                         param.setResult(null);
-                        log("CN DIRECT BOOTSTRAP: p0.g.r invoked");
+                        log("CN DIRECT DOWNLOAD: p0.g.r completed");
                     } catch (Throwable e) {
                         Throwable cause = e;
                         if (e instanceof java.lang.reflect.InvocationTargetException
                                 && ((java.lang.reflect.InvocationTargetException) e).getCause() != null) {
                             cause = ((java.lang.reflect.InvocationTargetException) e).getCause();
                         }
-                        log("CN DIRECT BOOTSTRAP failed: " + cause.getClass().getName()
+                        log("CN DIRECT DOWNLOAD failed: " + cause.getClass().getName()
                                 + ": " + String.valueOf(cause.getMessage()));
+                        StackTraceElement[] st = cause.getStackTrace();
+                        if (st != null && st.length > 0) {
+                            log("CN DIRECT DOWNLOAD cause at " + st[0].getClassName()
+                                    + "." + st[0].getMethodName() + ":" + st[0].getLineNumber());
+                        }
                     }
                 }
             });
-            log("hooked CN direct YellowPage bootstrap: p0.d.a(Context,m0.d)");
+            log("hooked CN direct download: o0.d.a -> p0.g.r");
         } catch (Throwable e) {
-            log("CN direct bootstrap hook failed: " + e.getClass().getName()
-                    + ": " + String.valueOf(e.getMessage()));
-        }
-    }
-
-    private static void hookYellowPageDaemon(ClassLoader cl) {
-        try {
-            Class<?> daemon = Class.forName("o0.d", false, cl);
-            Class<?> config = Class.forName("m0.d", false, cl);
-            Method run = daemon.getDeclaredMethod("a", Context.class, config);
-            XposedBridge.hookMethod(run, new XC_MethodHook() {
-                @Override
-                protected void beforeHookedMethod(MethodHookParam param) {
-                    try {
-                        Context context = (Context) param.args[0];
-                        Object dVar = param.args[1];
-                        Class<?> pull = Class.forName("p0.g", false, cl);
-                        Object task = pull.getDeclaredConstructor().newInstance();
-                        Method w = pull.getMethod("w", Context.class, String.class, Long.TYPE, Boolean.TYPE);
-                        boolean wifiOnly = false;
-                        try {
-                            Method c = config.getMethod("c");
-                            Object value = c.invoke(dVar);
-                            if (value instanceof Boolean) wifiOnly = (Boolean) value;
-                        } catch (Throwable ignored) {
-                        }
-
-                        log("PullDaemon: forcing native p0.g.w()");
-                        w.invoke(task, context, null, Long.MAX_VALUE, wifiOnly);
-                        param.setResult(null);
-                        log("PullDaemon: native p0.g.w() finished");
-                    } catch (Throwable e) {
-                        Throwable cause = e;
-                        if (e instanceof java.lang.reflect.InvocationTargetException
-                                && ((java.lang.reflect.InvocationTargetException) e).getCause() != null) {
-                            cause = ((java.lang.reflect.InvocationTargetException) e).getCause();
-                        }
-                        log("PullDaemon: force p0.g.w failed: "
-                                + cause.getClass().getName() + ": " + String.valueOf(cause.getMessage()));
-                        StackTraceElement[] st = cause.getStackTrace();
-                        if (st != null && st.length > 0) {
-                            log("PullDaemon: cause at " + st[0].getClassName() + "."
-                                    + st[0].getMethodName() + ":" + st[0].getLineNumber());
-                        }
-                    }                }
-            });
-            log("hooked PullTask daemon: o0.d.a(Context,m0.d)");
-        } catch (Throwable e) {
-            log("PullTask daemon hook failed: " + e.getClass().getSimpleName()
+            log("CN direct download hook failed: " + e.getClass().getName()
                     + ": " + String.valueOf(e.getMessage()));
         }
     }
@@ -3098,7 +3054,6 @@ hookMeteredNetworkGuard(cl);
             hookYellowPageRequestMode(cl);
             hookYellowPageWStatus(cl);
             hookYellowPageHConstructor(cl);
-            hookCnYellowPageDirectBootstrap(cl);
             hookYellowPageDaemon(cl);
             hookYellowPageActualRequestBuilder(cl);
             hookYellowPageRegionParam(cl);
