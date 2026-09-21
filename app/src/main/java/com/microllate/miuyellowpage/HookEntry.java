@@ -2908,9 +2908,8 @@ hookMeteredNetworkGuard(cl);
     private static void hookYellowPageDaemon(ClassLoader cl) {
         try {
             Class<?> daemon = Class.forName("o0.d", false, cl);
-            Class<?> config = Class.forName("m0.d", false, cl);
-            Class<?> pull = Class.forName("p0.g", false, cl);
-            Method run = daemon.getDeclaredMethod("a", Context.class, config);
+            Method run = daemon.getDeclaredMethod(
+                    "a", Context.class, Class.forName("m0.d", false, cl));
 
             final String bootstrapResponse =
                     "{"
@@ -2922,8 +2921,6 @@ hookMeteredNetworkGuard(cl);
                     + "\"newVersion\":82,"
                     + "\"fileSize\":1228718,"
                     + "\"md5Sum\":\"02ab27035f9dc85332e51d4eb40cb955\","
-                    + "\"oldMd5Sum\":\"\","
-                    + "\"newMd5Sum\":\"\","
                     + "\"fileURL\":\"https://cdn.cnbj1.fds.api.mi-img.com/core-app/privacy/yellowpage/yp-spam/82/20260919120751/yp_spam_82\","
                     + "\"patchType\":1"
                     + "}}";
@@ -2933,32 +2930,111 @@ hookMeteredNetworkGuard(cl);
                 protected void beforeHookedMethod(MethodHookParam param) {
                     try {
                         Context context = (Context) param.args[0];
-                        Object task = pull.getDeclaredConstructor().newInstance();
-                        Method responseHandler =
-                                pull.getDeclaredMethod("r", Context.class, String.class);
-                        responseHandler.setAccessible(true);
+                        org.json.JSONObject info =
+                                new org.json.JSONObject(bootstrapResponse)
+                                        .getJSONObject("info");
 
-                        log("CN DIRECT DOWNLOAD: bypass p0.g.w/H.w status gate");
-                        responseHandler.invoke(task, context, bootstrapResponse);
-                        param.setResult(null);
-                        log("CN DIRECT DOWNLOAD: p0.g.r completed");
+                        String urlString = info.getString("fileURL");
+                        long expectedSize = info.optLong("fileSize", -1L);
+                        String expectedMd5 = info.optString("md5Sum", "");
+
+                        // Use the application's real YellowPage data path.
+                        // Do not touch /storage/emulated/0: this EEA build's
+                        // YellowPage process is denied there (EPERM).
+                        Class<?> storeClass = Class.forName("r0.c", false, cl);
+                        Object store = storeClass.getDeclaredMethod("n").invoke(null);
+                        Method pathMethod = storeClass.getMethod("c", Context.class);
+                        java.io.File target = (java.io.File) pathMethod.invoke(store, context);
+
+                        java.io.File parent = target.getParentFile();
+                        if (parent != null && !parent.exists()
+                                && !parent.mkdirs() && !parent.exists()) {
+                            throw new java.io.IOException("cannot create target parent: " + parent);
+                        }
+
+                        log("CN DIRECT DOWNLOAD: private target=" + target.getAbsolutePath());
+
+                        java.net.HttpURLConnection http = null;
+                        java.io.InputStream in = null;
+                        java.io.FileOutputStream out = null;
+                        try {
+                            java.net.URL url = new java.net.URL(urlString);
+                            http = (java.net.HttpURLConnection) url.openConnection();
+                            http.setConnectTimeout(15000);
+                            http.setReadTimeout(30000);
+                            http.setInstanceFollowRedirects(true);
+                            http.setRequestMethod("GET");
+                            http.setRequestProperty("Accept-Encoding", "identity");
+                            http.setRequestProperty("User-Agent", "MiuiYellowPage/1.0");
+
+                            int code = http.getResponseCode();
+                            long contentLength = http.getContentLengthLong();
+                            log("CN DIRECT HTTP: code=" + code + " length=" + contentLength);
+
+                            if (code < 200 || code >= 300) {
+                                throw new java.io.IOException("HTTP " + code);
+                            }
+
+                            in = http.getInputStream();
+                            out = new java.io.FileOutputStream(target, false);
+                            java.security.MessageDigest md =
+                                    java.security.MessageDigest.getInstance("MD5");
+
+                            byte[] buffer = new byte[32768];
+                            long total = 0;
+                            int n;
+                            while ((n = in.read(buffer)) != -1) {
+                                if (n == 0) continue;
+                                out.write(buffer, 0, n);
+                                md.update(buffer, 0, n);
+                                total += n;
+                            }
+                            out.flush();
+                            try {
+                                out.getFD().sync();
+                            } catch (Throwable ignored) {
+                            }
+
+                            StringBuilder md5 = new StringBuilder(32);
+                            for (byte value : md.digest()) {
+                                md5.append(String.format(java.util.Locale.US,
+                                        "%02x", value & 0xff));
+                            }
+
+                            if (expectedSize > 0 && total != expectedSize) {
+                                throw new java.io.IOException(
+                                        "size mismatch: " + total + " != " + expectedSize);
+                            }
+                            if (!expectedMd5.isEmpty()
+                                    && !expectedMd5.equalsIgnoreCase(md5.toString())) {
+                                throw new java.io.IOException(
+                                        "md5 mismatch: " + md5 + " != " + expectedMd5);
+                            }
+
+                            log("CN DIRECT DOWNLOAD OK: bytes=" + total
+                                    + " md5=" + md5
+                                    + " target=" + target.getAbsolutePath());
+
+                            param.setResult(null);
+                        } finally {
+                            try {
+                                if (out != null) out.close();
+                            } catch (Throwable ignored) {
+                            }
+                            try {
+                                if (in != null) in.close();
+                            } catch (Throwable ignored) {
+                            }
+                            if (http != null) http.disconnect();
+                        }
                     } catch (Throwable e) {
-                        Throwable cause = e;
-                        if (e instanceof java.lang.reflect.InvocationTargetException
-                                && ((java.lang.reflect.InvocationTargetException) e).getCause() != null) {
-                            cause = ((java.lang.reflect.InvocationTargetException) e).getCause();
-                        }
-                        log("CN DIRECT DOWNLOAD failed: " + cause.getClass().getName()
-                                + ": " + String.valueOf(cause.getMessage()));
-                        StackTraceElement[] st = cause.getStackTrace();
-                        if (st != null && st.length > 0) {
-                            log("CN DIRECT DOWNLOAD cause at " + st[0].getClassName()
-                                    + "." + st[0].getMethodName() + ":" + st[0].getLineNumber());
-                        }
+                        log("CN DIRECT DOWNLOAD failed: " + e.getClass().getName()
+                                + ": " + String.valueOf(e.getMessage()));
+                        param.setThrowable(e);
                     }
                 }
             });
-            log("hooked CN direct download: o0.d.a -> p0.g.r");
+            log("hooked CN direct download: o0.d.a -> private YellowPage file");
         } catch (Throwable e) {
             log("CN direct download hook failed: " + e.getClass().getName()
                     + ": " + String.valueOf(e.getMessage()));
