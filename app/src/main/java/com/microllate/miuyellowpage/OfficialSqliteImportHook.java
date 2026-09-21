@@ -52,6 +52,19 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
                         if (!p.hasThrowable()) {
                             boolean old = Boolean.TRUE.equals(p.getResult());
                             log("PRESET GATE s0.a.q(Context): " + old + " -> true");
+                            if (!old) {
+                                try {
+                                    StackTraceElement[] st = new Throwable().getStackTrace();
+                                    StringBuilder sb = new StringBuilder("PRESET GATE FALSE STACK:");
+                                    int limit = Math.min(st.length, 14);
+                                    for (int i = 1; i < limit; i++) {
+                                        sb.append("\\n  at ").append(st[i].toString());
+                                    }
+                                    log(sb.toString());
+                                } catch (Throwable e) {
+                                    log("PRESET GATE stack failed: " + e.getClass().getName() + ": " + e.getMessage());
+                                }
+                            }
                             p.setResult(true);
                         }
                     }
