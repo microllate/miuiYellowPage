@@ -29,7 +29,15 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         Context app = context.getApplicationContext();
         if (app == null) app = context;
 
+        // Run the CN APK's real first-run preset extraction before checking q()/N().
+        if (!importPresetData(app)) {
+            log("PRESET IMPORT FAILED: s0.c.s().p(Context) returned false");
+            return;
+        }
+
         java.io.File dataFile = new java.io.File(app.getFilesDir(), "yellowpage/yellow_pages.dat");
+        log("PRESET FILE AFTER p(): path=" + dataFile.getAbsolutePath()
+                + " exists=" + dataFile.exists() + " bytes=" + dataFile.length());
         if (!dataFile.isFile() || dataFile.length() <= 0) {
             log("skip: preset missing/empty reason=" + reason + " path=" + dataFile.getAbsolutePath());
             return;
@@ -41,38 +49,6 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
 
         try {
             ClassLoader cl = app.getClassLoader();
-
-            // Current APK: N() uses s0.c.s() -> s0.a.q(Context) -> File.exists().
-            // Hook the actual gate from the currently supplied APK, not r0.a.
-            try {
-                Class<?> gateClass = Class.forName("s0.a", false, cl);
-                Method q = gateClass.getDeclaredMethod("q", Context.class);
-                XposedBridge.hookMethod(q, new XC_MethodHook() {
-                    @Override protected void afterHookedMethod(MethodHookParam p) {
-                        if (!p.hasThrowable()) {
-                            boolean old = Boolean.TRUE.equals(p.getResult());
-                            log("PRESET GATE s0.a.q(Context): " + old + " -> true");
-                            if (!old) {
-                                try {
-                                    StackTraceElement[] st = new Throwable().getStackTrace();
-                                    StringBuilder sb = new StringBuilder("PRESET GATE FALSE STACK:");
-                                    int limit = Math.min(st.length, 14);
-                                    for (int i = 1; i < limit; i++) {
-                                        sb.append("\\n  at ").append(st[i].toString());
-                                    }
-                                    log(sb.toString());
-                                } catch (Throwable e) {
-                                    log("PRESET GATE stack failed: " + e.getClass().getName() + ": " + e.getMessage());
-                                }
-                            }
-                            p.setResult(true);
-                        }
-                    }
-                });
-                log("PRESET GATE HOOKED: s0.a.q(Context)");
-            } catch (Throwable e) {
-                log("PRESET GATE HOOK FAILED: " + e.getClass().getName() + ": " + e.getMessage());
-            }
 
             hookParser(cl);
             hookInsertHelper(cl);
@@ -111,6 +87,43 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             log("FAILED N(): " + c.getClass().getName() + ": " + c.getMessage());
         } finally {
             importing.set(false);
+        }
+    }
+
+    private boolean importPresetData(Context context) {
+        try {
+            ClassLoader cl = context.getClassLoader();
+            Class<?> presetClass = Class.forName("s0.c", false, cl);
+            Method singleton = presetClass.getDeclaredMethod("s");
+            singleton.setAccessible(true);
+            Object preset = singleton.invoke(null);
+
+            Method k = presetClass.getMethod("k");
+            int resId = ((Number) k.invoke(preset)).intValue();
+            Method d = presetClass.getMethod("d");
+            Method f = presetClass.getMethod("f");
+            Method n = presetClass.getMethod("n");
+
+            log("PRESET p(): resId=" + resId
+                    + " d=" + d.invoke(preset)
+                    + " dir=" + f.invoke(preset)
+                    + " zip=" + n.invoke(preset));
+
+            Method p = presetClass.getMethod("p", Context.class);
+            Object result = p.invoke(preset, context);
+            boolean ok = Boolean.TRUE.equals(result);
+
+            java.io.File dir = new java.io.File(context.getFilesDir(), String.valueOf(f.invoke(preset)));
+            java.io.File data = new java.io.File(dir, String.valueOf(d.invoke(preset)));
+            log("PRESET p() RESULT=" + ok
+                    + " dirExists=" + dir.exists()
+                    + " dataExists=" + data.exists()
+                    + " dataBytes=" + data.length());
+            return ok;
+        } catch (Throwable e) {
+            Throwable t = e.getCause() != null ? e.getCause() : e;
+            log("PRESET p() THROW: " + t.getClass().getName() + ": " + t.getMessage());
+            return false;
         }
     }
 
