@@ -2941,10 +2941,13 @@ hookMeteredNetworkGuard(cl);
                         // Use the application's real YellowPage data path.
                         // Do not touch /storage/emulated/0: this EEA build's
                         // YellowPage process is denied there (EPERM).
+                        // Domestic YellowPage r0.c exposes c(Context) directly.
+                        // Do not call the EEA-style r0.c.n() singleton: it does not exist
+                        // in the domestic APK and causes NoSuchMethodException.
                         Class<?> storeClass = Class.forName("r0.c", false, cl);
-                        Object store = storeClass.getDeclaredMethod("n").invoke(null);
-                        Method pathMethod = storeClass.getMethod("c", Context.class);
-                        java.io.File target = (java.io.File) pathMethod.invoke(store, context);
+                        Method pathMethod = storeClass.getDeclaredMethod("c", Context.class);
+                        pathMethod.setAccessible(true);
+                        java.io.File target = (java.io.File) pathMethod.invoke(null, context);
 
                         java.io.File parent = target.getParentFile();
                         if (parent != null && !parent.exists()
