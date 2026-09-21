@@ -3145,6 +3145,7 @@ hookMeteredNetworkGuard(cl);
             hookOfficialImportExecution(cl);
             hookOfficialImportOfficialLog(cl);
             hookOfficialImportFileChecks(cl);
+            hookOfficialImportPresetCheck(cl);
 
             OFFICIAL_IMPORT_FROM_JSON_COUNT.set(0);
 
