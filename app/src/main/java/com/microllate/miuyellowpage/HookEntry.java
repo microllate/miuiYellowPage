@@ -2435,7 +2435,9 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void logDatabaseStats(Context context, ClassLoader cl, String stage) {
         try {
-            hookOfficialImportFileChecks(cl);\n\n            Class<?> dbHelperClass = Class.forName(
+            hookOfficialImportFileChecks(cl);
+
+            Class<?> dbHelperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
                     false, cl);
             Object helper = XposedHelpers.callStaticMethod(dbHelperClass, "E", context);
