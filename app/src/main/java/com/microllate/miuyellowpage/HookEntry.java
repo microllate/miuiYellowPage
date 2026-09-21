@@ -2938,16 +2938,14 @@ hookMeteredNetworkGuard(cl);
                         long expectedSize = info.optLong("fileSize", -1L);
                         String expectedMd5 = info.optString("md5Sum", "");
 
-                        // Use the application's real YellowPage data path.
-                        // Do not touch /storage/emulated/0: this EEA build's
-                        // YellowPage process is denied there (EPERM).
-                        // Domestic YellowPage r0.c exposes c(Context) directly.
-                        // Do not call the EEA-style r0.c.n() singleton: it does not exist
-                        // in the domestic APK and causes NoSuchMethodException.
-                        Class<?> storeClass = Class.forName("r0.c", false, cl);
-                        Method pathMethod = storeClass.getDeclaredMethod("c", Context.class);
+                        // This APK's actual path provider is p0.g.c(Context).
+                        // p0.g has a public no-arg constructor and delegates to
+                        // s0.c/s0.a, which resolves files/yellowpage/yellow_pages.dat.
+                        Class<?> pathProviderClass = Class.forName("p0.g", false, cl);
+                        Object pathProvider = pathProviderClass.getDeclaredConstructor().newInstance();
+                        Method pathMethod = pathProviderClass.getDeclaredMethod("c", Context.class);
                         pathMethod.setAccessible(true);
-                        java.io.File target = (java.io.File) pathMethod.invoke(null, context);
+                        java.io.File target = (java.io.File) pathMethod.invoke(pathProvider, context);
 
                         java.io.File parent = target.getParentFile();
                         if (parent != null && !parent.exists()
