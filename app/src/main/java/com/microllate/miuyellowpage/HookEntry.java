@@ -3334,3 +3334,11 @@ hookYellowPageDownload(cl);
             Class<?> dbHelperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
                     false, cl);
+
+            installProviderHooks(cl, dbHelperClass);
+        } catch (Throwable e) {
+            log("YellowPage initialization failed: "
+                    + e.getClass().getSimpleName());
+        }
+    }
+}
