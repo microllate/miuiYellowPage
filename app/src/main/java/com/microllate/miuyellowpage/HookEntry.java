@@ -22,7 +22,28 @@ public class HookEntry implements IXposedHookLoadPackage {
     private static final String YELLOWPAGE = "com.miui.yellowpage";
     private static final String TAG = "miu-iYellowPage";
 
+    // Marks execution inside the official YellowPageDatabaseHelper.N import method.
+    private static final ThreadLocal<Integer> OFFICIAL_IMPORT_FROM_JSON_COUNT =
+            new ThreadLocal<Integer>() {
+                @Override
+                protected Integer initialValue() {
+                    return 0;
+                }
+            };
+
+    private static final ThreadLocal<Integer> OFFICIAL_IMPORT_DEPTH =
+            new ThreadLocal<Integer>() {
+                @Override
+                protected Integer initialValue() {
+                    return 0;
+                }
+            };
+
     private static void log(String message) {
+        // Import investigation only: suppress all already-proven acquisition/startup logs.
+        if (message == null || !message.startsWith("OFFICIAL IMPORT")) {
+            return;
+        }
         Log.i(TAG, message);
         try {
             XposedBridge.log(TAG + ": " + message);
@@ -2435,6 +2456,9 @@ public class HookEntry implements IXposedHookLoadPackage {
 
     private static void logDatabaseStats(Context context, ClassLoader cl, String stage) {
         try {
+            hookOfficialImportFileChecks(cl);
+            hookOfficialImportPresetCheck(cl);
+
             Class<?> dbHelperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
                     false, cl);
@@ -2905,6 +2929,314 @@ hookMeteredNetworkGuard(cl);
 
 
 
+
+    private static void hookOfficialImportOfficialLog(ClassLoader cl) {
+        try {
+            Class<?> logClass = Class.forName("miui.yellowpage.Log", false, cl);
+            for (Method method : logClass.getDeclaredMethods()) {
+                if (!"d".equals(method.getName())
+                        || method.getParameterTypes().length != 2
+                        || method.getParameterTypes()[0] != String.class
+                        || method.getParameterTypes()[1] != String.class) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void beforeHookedMethod(MethodHookParam param) {
+                        if (!isInsideOfficialImport()) return;
+                        String msg = String.valueOf(param.args[1]);
+                        if (msg.contains("importYellowPage()")) {
+                            log("OFFICIAL IMPORT APK LOG: " + msg);
+                        }
+                    }
+                });
+                break;
+            }
+        } catch (Throwable e) {
+            log("OFFICIAL IMPORT APK LOG HOOK FAILED: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+    private static void hookOfficialImportExecution(ClassLoader cl) {
+        try {
+            Class<?> yp = Class.forName("miui.yellowpage.YellowPage", false, cl);
+            for (Method method : yp.getDeclaredMethods()) {
+                if (!"fromJson".equals(method.getName())
+                        || method.getParameterTypes().length != 1
+                        || method.getParameterTypes()[0] != String.class
+                        || method.getReturnType() != yp) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.hasThrowable() || !isInsideOfficialImport()) return;
+                        Integer n = OFFICIAL_IMPORT_FROM_JSON_COUNT.get();
+                        n = n == null ? 1 : n + 1;
+                        OFFICIAL_IMPORT_FROM_JSON_COUNT.set(n);
+                        if (n <= 3) {
+                            String line = param.args != null && param.args.length > 0
+                                    ? String.valueOf(param.args[0]) : "";
+                            log("OFFICIAL IMPORT FROMJSON: count=" + n
+                                    + " length=" + line.length());
+                        }
+                    }
+                });
+                break;
+            }
+
+            for (Method method : SQLiteDatabase.class.getDeclaredMethods()) {
+                if (!"insertWithOnConflict".equals(method.getName())
+                        || method.getParameterTypes().length != 4
+                        || method.getReturnType() != Long.TYPE) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.hasThrowable() || !isInsideOfficialImport()) return;
+                        String table = param.args != null && param.args.length > 0
+                                ? String.valueOf(param.args[0]) : "null";
+                        if ("yellow_page".equals(table)) {
+                            log("OFFICIAL IMPORT INSERT: table=yellow_page result="
+                                    + String.valueOf(param.getResult()));
+                        }
+                    }
+                });
+                break;
+            }
+
+            log("OFFICIAL IMPORT EXECUTION TRACE INSTALLED");
+        } catch (Throwable e) {
+            log("OFFICIAL IMPORT EXECUTION TRACE FAILED: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+    private static void hookOfficialImportFileChecks(ClassLoader cl) {
+        try {
+            // r0.a.l/c() are tiny methods and may be ART-inlined.
+            // Trace the concrete java.io.File operations used by N() instead.
+            for (Method method : java.io.File.class.getDeclaredMethods()) {
+                if ("exists".equals(method.getName())
+                        && method.getParameterTypes().length == 0
+                        && method.getReturnType() == Boolean.TYPE) {
+                    XposedBridge.hookMethod(method, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (param.hasThrowable() || !isInsideOfficialImport()) return;
+                            Object obj = param.thisObject;
+                            if (obj instanceof java.io.File) {
+                                java.io.File f = (java.io.File) obj;
+                                log("OFFICIAL IMPORT FILE.exists: "
+                                        + f.getAbsolutePath() + "=" + param.getResult()
+                                        + " length=" + f.length());
+                            }
+                        }
+                    });
+                }
+            }
+
+            for (java.lang.reflect.Constructor<?> ctor
+                    : java.io.FileReader.class.getDeclaredConstructors()) {
+                Class<?>[] p = ctor.getParameterTypes();
+                if (p.length == 1 && p[0] == java.io.File.class) {
+                    XposedBridge.hookMethod(ctor, new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            if (!isInsideOfficialImport()) return;
+                            java.io.File f = param.args[0] instanceof java.io.File
+                                    ? (java.io.File) param.args[0] : null;
+                            log("OFFICIAL IMPORT FILEREADER: "
+                                    + (f == null ? "null" : f.getAbsolutePath())
+                                    + " exists=" + (f != null && f.exists())
+                                    + " length=" + (f == null ? -1 : f.length()));
+                        }
+                    });
+                }
+            }
+
+            for (Method method : java.io.BufferedReader.class.getDeclaredMethods()) {
+                if ("readLine".equals(method.getName())
+                        && method.getParameterTypes().length == 0
+                        && method.getReturnType() == String.class) {
+                    XposedBridge.hookMethod(method, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (param.hasThrowable() || !isInsideOfficialImport()) return;
+                            Object result = param.getResult();
+                            String line = result == null ? "null" : String.valueOf(result);
+                            log("OFFICIAL IMPORT READLINE: length=" + line.length());
+                        }
+                    });
+                    break;
+                }
+            }
+        } catch (Throwable e) {
+            log("OFFICIAL IMPORT FILE TRACE FAILED: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+    private static void hookOfficialImportPresetCheck(ClassLoader cl) {
+        try {
+            Class<?> presetBase = Class.forName("r0.a", false, cl);
+            for (Method method : presetBase.getDeclaredMethods()) {
+                if (!"l".equals(method.getName())
+                        || method.getReturnType() != Boolean.TYPE
+                        || method.getParameterTypes().length != 1
+                        || method.getParameterTypes()[0] != Context.class) {
+                    continue;
+                }
+                XposedBridge.hookMethod(method, new XC_MethodHook() {
+                    @Override
+                    protected void afterHookedMethod(MethodHookParam param) {
+                        if (param.hasThrowable()) return;
+                        // Do not depend on N's ThreadLocal scope here: this is the
+                        // first branch inside N and ART may inline surrounding code.
+                        log("OFFICIAL IMPORT PRESET CHECK: r0.a.l(Context)="
+                                + String.valueOf(param.getResult()));
+                    }
+                });
+                log("OFFICIAL IMPORT PRESET CHECK HOOK INSTALLED");
+                break;
+            }
+        } catch (Throwable e) {
+            log("OFFICIAL IMPORT PRESET CHECK HOOK FAILED: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+    private static boolean isInsideOfficialImport() {
+        try {
+            Integer depth = OFFICIAL_IMPORT_DEPTH.get();
+            return depth != null && depth > 0;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static void logOfficialImportPath(Context context, ClassLoader cl) {
+        try {
+            Class<?> pathProviderClass = Class.forName("p0.g", false, cl);
+            Object pathProvider = pathProviderClass.getDeclaredConstructor().newInstance();
+            Method pathMethod = pathProviderClass.getDeclaredMethod("c", Context.class);
+            pathMethod.setAccessible(true);
+            Object result = pathMethod.invoke(pathProvider, context);
+            if (!(result instanceof java.io.File)) {
+                log("OFFICIAL IMPORT PATH RESULT: "
+                        + (result == null ? "null" : result.getClass().getName()));
+                return;
+            }
+            java.io.File file = (java.io.File) result;
+            log("OFFICIAL IMPORT PATH: " + file.getAbsolutePath());
+            log("OFFICIAL IMPORT EXISTS: " + file.exists());
+            log("OFFICIAL IMPORT LENGTH: " + file.length());
+        } catch (Throwable e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            log("OFFICIAL IMPORT PATH FAILED: " + cause.getClass().getName()
+                    + ": " + String.valueOf(cause.getMessage()));
+        }
+    }
+
+    private static void triggerOfficialYellowPageImport(Context context, ClassLoader cl) {
+        try {
+            hookOfficialImportExecution(cl);
+            hookOfficialImportOfficialLog(cl);
+            hookOfficialImportFileChecks(cl);
+            hookOfficialImportPresetCheck(cl);
+
+            OFFICIAL_IMPORT_FROM_JSON_COUNT.set(0);
+
+            logOfficialImportPath(context, cl);
+
+            // Directly execute the exact first branch helper used by N(). This avoids
+            // relying on File.exists()/N() hooks that ART may inline.
+            try {
+                Class<?> presetBase = Class.forName("r0.a", false, cl);
+                Object preset = presetBase.getDeclaredConstructor().newInstance();
+                Method presetCheck = presetBase.getDeclaredMethod("l", Context.class);
+                presetCheck.setAccessible(true);
+                Object presetResult = presetCheck.invoke(preset, context);
+                log("OFFICIAL IMPORT DIRECT PRESET CHECK: r0.a.l(Context)="
+                        + String.valueOf(presetResult));
+                Method pathCheck = presetBase.getDeclaredMethod("c", Context.class);
+                pathCheck.setAccessible(true);
+                Object presetFile = pathCheck.invoke(preset, context);
+                log("OFFICIAL IMPORT DIRECT PRESET FILE: "
+                        + String.valueOf(presetFile));
+            } catch (Throwable e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                log("OFFICIAL IMPORT DIRECT PRESET CHECK FAILED: "
+                        + cause.getClass().getName() + ": " + String.valueOf(cause.getMessage()));
+            }
+
+            Class<?> helperClass = Class.forName(
+                    "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
+                    false, cl);
+
+            Method getInstance = null;
+            for (Method m : helperClass.getDeclaredMethods()) {
+                if (!Modifier.isStatic(m.getModifiers())
+                        || m.getParameterTypes().length != 1
+                        || m.getParameterTypes()[0] != Context.class
+                        || !helperClass.isAssignableFrom(m.getReturnType())) {
+                    continue;
+                }
+                if ("E".equals(m.getName())) {
+                    getInstance = m;
+                    break;
+                }
+            }
+            if (getInstance == null) {
+                log("OFFICIAL IMPORT: YellowPageDatabaseHelper.E(Context) not found");
+                return;
+            }
+
+            getInstance.setAccessible(true);
+            Object helper = getInstance.invoke(null, context);
+            if (helper == null) {
+                log("OFFICIAL IMPORT: helper is null");
+                return;
+            }
+
+            Method getWritableDatabase = helperClass.getMethod("getWritableDatabase");
+            Object db = getWritableDatabase.invoke(helper);
+            if (!(db instanceof SQLiteDatabase)) {
+                log("OFFICIAL IMPORT: getWritableDatabase() returned "
+                        + (db == null ? "null" : db.getClass().getName()));
+                return;
+            }
+
+            Method importMethod = null;
+            for (Method m : helperClass.getDeclaredMethods()) {
+                if (!"N".equals(m.getName())
+                        || m.getParameterTypes().length != 2
+                        || m.getParameterTypes()[0] != Context.class
+                        || m.getParameterTypes()[1] != SQLiteDatabase.class) {
+                    continue;
+                }
+                importMethod = m;
+                break;
+            }
+            if (importMethod == null) {
+                log("OFFICIAL IMPORT: YellowPageDatabaseHelper.N(Context,SQLiteDatabase) not found");
+                return;
+            }
+
+            importMethod.setAccessible(true);
+            log("OFFICIAL IMPORT ENTER: YellowPageDatabaseHelper.N(Context,SQLiteDatabase)");
+            importMethod.invoke(helper, context, db);
+            Integer imported = OFFICIAL_IMPORT_FROM_JSON_COUNT.get();
+            log("OFFICIAL IMPORT RESULT: N returned fromJson=" + String.valueOf(imported));
+        } catch (Throwable e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            log("OFFICIAL IMPORT FAILED: " + cause.getClass().getName()
+                    + ": " + String.valueOf(cause.getMessage()));
+        }
+    }
+
     private static void hookYellowPageDaemon(ClassLoader cl) {
         try {
             Class<?> daemon = Class.forName("o0.d", false, cl);
@@ -3015,6 +3347,8 @@ hookMeteredNetworkGuard(cl);
                             log("CN DIRECT DOWNLOAD OK: bytes=" + total
                                     + " md5=" + md5
                                     + " target=" + target.getAbsolutePath());
+
+                            triggerOfficialYellowPageImport(context, cl);
 
                             param.setResult(null);
                         } finally {
@@ -3166,4 +3500,3 @@ hookYellowPageDownload(cl);
         }
     }
 }
-
