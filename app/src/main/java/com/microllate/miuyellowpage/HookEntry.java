@@ -2923,77 +2923,61 @@ hookMeteredNetworkGuard(cl);
 
     private static void hookOfficialImportFileChecks(ClassLoader cl) {
         try {
-            // Use the actual N() execution as the scope marker. The previous
-            // stack-trace test was too fragile for Xposed callback stacks and
-            // caused the l()/c() diagnostics to disappear.
-            Class<?> helperClass = Class.forName(
-                    "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
-                    false, cl);
-
-            for (Method method : helperClass.getDeclaredMethods()) {
-                if (!"N".equals(method.getName())
-                        || method.getParameterTypes().length != 2
-                        || method.getParameterTypes()[0] != Context.class
-                        || method.getParameterTypes()[1] != SQLiteDatabase.class) {
-                    continue;
-                }
-
-                XposedBridge.hookMethod(method, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) {
-                        Integer depth = OFFICIAL_IMPORT_DEPTH.get();
-                        OFFICIAL_IMPORT_DEPTH.set(depth == null ? 1 : depth + 1);
-                    }
-
-                    @Override
-                    protected void afterHookedMethod(MethodHookParam param) {
-                        Integer depth = OFFICIAL_IMPORT_DEPTH.get();
-                        if (depth == null || depth <= 1) {
-                            OFFICIAL_IMPORT_DEPTH.set(0);
-                        } else {
-                            OFFICIAL_IMPORT_DEPTH.set(depth - 1);
+            // r0.a.l/c() are tiny methods and may be ART-inlined.
+            // Trace the concrete java.io.File operations used by N() instead.
+            for (Method method : java.io.File.class.getDeclaredMethods()) {
+                if ("exists".equals(method.getName())
+                        && method.getParameterTypes().length == 0
+                        && method.getReturnType() == Boolean.TYPE) {
+                    XposedBridge.hookMethod(method, new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (param.hasThrowable() || !isInsideOfficialImport()) return;
+                            Object obj = param.thisObject;
+                            if (obj instanceof java.io.File) {
+                                java.io.File f = (java.io.File) obj;
+                                log("OFFICIAL IMPORT FILE.exists: "
+                                        + f.getAbsolutePath() + "=" + param.getResult()
+                                        + " length=" + f.length());
+                            }
                         }
-                    }
-                });
-                break;
+                    });
+                }
             }
 
-            Class<?> fileProvider = Class.forName("r0.a", false, cl);
-
-            for (Method method : fileProvider.getDeclaredMethods()) {
-                if ("l".equals(method.getName())
-                        && method.getReturnType() == Boolean.TYPE
-                        && method.getParameterTypes().length == 1
-                        && method.getParameterTypes()[0] == Context.class) {
-                    XposedBridge.hookMethod(method, new XC_MethodHook() {
+            for (java.lang.reflect.Constructor<?> ctor
+                    : java.io.FileReader.class.getDeclaredConstructors()) {
+                Class<?>[] p = ctor.getParameterTypes();
+                if (p.length == 1 && p[0] == java.io.File.class) {
+                    XposedBridge.hookMethod(ctor, new XC_MethodHook() {
                         @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (param.hasThrowable()) return;
+                        protected void beforeHookedMethod(MethodHookParam param) {
                             if (!isInsideOfficialImport()) return;
-                            log("OFFICIAL IMPORT CHECK: r0.a.l(Context)="
-                                    + param.getResult());
+                            java.io.File f = param.args[0] instanceof java.io.File
+                                    ? (java.io.File) param.args[0] : null;
+                            log("OFFICIAL IMPORT FILEREADER: "
+                                    + (f == null ? "null" : f.getAbsolutePath())
+                                    + " exists=" + (f != null && f.exists())
+                                    + " length=" + (f == null ? -1 : f.length()));
                         }
                     });
                 }
+            }
 
-                if ("c".equals(method.getName())
-                        && method.getReturnType() == java.io.File.class
-                        && method.getParameterTypes().length == 1
-                        && method.getParameterTypes()[0] == Context.class) {
+            for (Method method : java.io.BufferedReader.class.getDeclaredMethods()) {
+                if ("readLine".equals(method.getName())
+                        && method.getParameterTypes().length == 0
+                        && method.getReturnType() == String.class) {
                     XposedBridge.hookMethod(method, new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
-                            if (param.hasThrowable()) return;
-                            if (!isInsideOfficialImport()) return;
+                            if (param.hasThrowable() || !isInsideOfficialImport()) return;
                             Object result = param.getResult();
-                            java.io.File file = result instanceof java.io.File
-                                    ? (java.io.File) result : null;
-                            log("OFFICIAL IMPORT PATH: r0.a.c(Context)="
-                                    + (file == null ? "null" : file.getAbsolutePath())
-                                    + " exists=" + (file != null && file.exists())
-                                    + " length=" + (file == null ? -1 : file.length()));
+                            String line = result == null ? "null" : String.valueOf(result);
+                            log("OFFICIAL IMPORT READLINE: length=" + line.length());
                         }
                     });
+                    break;
                 }
             }
         } catch (Throwable e) {
