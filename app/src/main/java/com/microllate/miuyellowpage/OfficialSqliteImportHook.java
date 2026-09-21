@@ -5,7 +5,6 @@ import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 
 import java.lang.reflect.Method;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -20,8 +19,7 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private final AtomicBoolean importing = new AtomicBoolean(false);
 
     private void log(String s) {
-        Log.i(TAG, "OFFICIAL IMPORT FIX: " + s);
-        try { XposedBridge.log(TAG + ": OFFICIAL IMPORT FIX: " + s); } catch (Throwable ignored) {}
+        Log.i(TAG, "OFFICIAL IMPORT: " + s);
     }
 
     private void importOfficial(Context context, String reason) {
@@ -29,49 +27,27 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         Context app = context.getApplicationContext();
         if (app == null) app = context;
 
-        // Run the CN APK's real first-run preset extraction before checking q()/N().
-        if (!importPresetData(app)) {
-            log("PRESET IMPORT FAILED: s0.c.s().p(Context) returned false");
-            return;
-        }
+        if (!importPresetData(app)) return;
 
         java.io.File dataFile = new java.io.File(app.getFilesDir(), "yellowpage/yellow_pages.dat");
-        log("PRESET FILE AFTER p(): path=" + dataFile.getAbsolutePath()
-                + " exists=" + dataFile.exists() + " bytes=" + dataFile.length());
         if (!dataFile.isFile() || dataFile.length() <= 0) {
-            log("skip: preset missing/empty reason=" + reason + " path=" + dataFile.getAbsolutePath());
+            log("preset file missing: " + dataFile.getAbsolutePath());
             return;
         }
-        if (!importing.compareAndSet(false, true)) {
-            log("skip: import already running reason=" + reason);
-            return;
-        }
+        if (!importing.compareAndSet(false, true)) return;
 
         try {
             ClassLoader cl = app.getClassLoader();
-
-            hookParser(cl);
-            hookInsertHelper(cl);
-            hookYellowPageInsert(cl);
-
             Class<?> helperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper", false, cl);
             Method getInstance = helperClass.getDeclaredMethod("E", Context.class);
             getInstance.setAccessible(true);
             Object helper = getInstance.invoke(null, app);
-            if (helper == null) {
-                log("FAILED: helper E() returned null");
-                return;
-            }
-
             Method getWritable = helperClass.getMethod("getWritableDatabase");
             SQLiteDatabase db = (SQLiteDatabase) getWritable.invoke(helper);
+
             long beforeYellow = count(db, "yellow_page");
             long beforePhone = count(db, "phone_lookup");
-
-            log("ENTER N(): reason=" + reason + " file=" + dataFile.getAbsolutePath()
-                    + " bytes=" + dataFile.length()
-                    + " before yellow_page=" + beforeYellow + " phone_lookup=" + beforePhone);
 
             Method n = helperClass.getDeclaredMethod("N", Context.class, SQLiteDatabase.class);
             n.setAccessible(true);
@@ -79,12 +55,11 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
 
             long afterYellow = count(db, "yellow_page");
             long afterPhone = count(db, "phone_lookup");
-            log("EXIT N(): yellow_page=" + afterYellow + " phone_lookup=" + afterPhone
-                    + " deltaYellow=" + (afterYellow - beforeYellow)
-                    + " deltaPhone=" + (afterPhone - beforePhone));
+            log("import " + reason + ": yellow_page " + beforeYellow + " -> " + afterYellow
+                    + ", phone_lookup " + beforePhone + " -> " + afterPhone);
         } catch (Throwable e) {
-            Throwable c = e.getCause() != null ? e.getCause() : e;
-            log("FAILED N(): " + c.getClass().getName() + ": " + c.getMessage());
+            Throwable t = e.getCause() != null ? e.getCause() : e;
+            log("N() failed: " + t.getClass().getSimpleName() + ": " + t.getMessage());
         } finally {
             importing.set(false);
         }
@@ -100,105 +75,23 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
 
             Method k = presetClass.getMethod("k");
             int resId = ((Number) k.invoke(preset)).intValue();
-            Method d = presetClass.getMethod("d");
-            Method f = presetClass.getMethod("f");
-            Method n = presetClass.getMethod("n");
-
-            log("PRESET p(): resId=" + resId
-                    + " d=" + d.invoke(preset)
-                    + " dir=" + f.invoke(preset)
-                    + " zip=" + n.invoke(preset));
-
             Method p = presetClass.getMethod("p", Context.class);
             Object result = p.invoke(preset, context);
             boolean ok = Boolean.TRUE.equals(result);
 
-            java.io.File dir = new java.io.File(context.getFilesDir(), String.valueOf(f.invoke(preset)));
-            java.io.File data = new java.io.File(dir, String.valueOf(d.invoke(preset)));
-            log("PRESET p() RESULT=" + ok
-                    + " dirExists=" + dir.exists()
-                    + " dataExists=" + data.exists()
-                    + " dataBytes=" + data.length());
+            Method d = presetClass.getMethod("d");
+            Method f = presetClass.getMethod("f");
+            java.io.File data = new java.io.File(
+                    new java.io.File(context.getFilesDir(), String.valueOf(f.invoke(preset))),
+                    String.valueOf(d.invoke(preset)));
+
+            log("preset p(): resId=" + resId + ", ok=" + ok
+                    + ", data=" + data.exists() + "/" + data.length());
             return ok;
         } catch (Throwable e) {
             Throwable t = e.getCause() != null ? e.getCause() : e;
-            log("PRESET p() THROW: " + t.getClass().getName() + ": " + t.getMessage());
+            log("preset p() failed: " + t.getClass().getSimpleName() + ": " + t.getMessage());
             return false;
-        }
-    }
-
-    private void hookParser(ClassLoader cl) {
-        try {
-            Class<?> yp = Class.forName("miui.yellowpage.YellowPage", false, cl);
-            Method m = yp.getDeclaredMethod("fromJson", String.class);
-            XposedBridge.hookMethod(m, new XC_MethodHook() {
-                @Override protected void beforeHookedMethod(MethodHookParam p) {
-                    String s = p.args != null && p.args.length > 0 && p.args[0] instanceof String
-                            ? (String)p.args[0] : null;
-                    if (s == null || s.length() == 0) {
-                        log("fromJson INPUT empty");
-                    } else {
-                        String sample = s.length() > 180 ? s.substring(0, 180) : s;
-                        log("fromJson INPUT len=" + s.length() + " sample=" + sample);
-                    }
-                }
-                @Override protected void afterHookedMethod(MethodHookParam p) {
-                    if (p.hasThrowable()) {
-                        Throwable t = p.getThrowable();
-                        log("fromJson THROW: " + t.getClass().getName() + ": " + t.getMessage());
-                    } else {
-                        log("fromJson RESULT: " + (p.getResult() == null ? "null" : "object"));
-                    }
-                }
-            });
-            log("hooked miui.yellowpage.YellowPage.fromJson(String)");
-        } catch (Throwable e) {
-            log("fromJson hook failed: " + e.getClass().getName() + ": " + e.getMessage());
-        }
-    }
-
-    private void hookInsertHelper(ClassLoader cl) {
-        try {
-            Class<?> yp = Class.forName("miui.yellowpage.YellowPage", false, cl);
-            Class<?> g = Class.forName("g0.g", false, cl);
-            Method m = g.getDeclaredMethod("f", SQLiteDatabase.class, yp);
-            XposedBridge.hookMethod(m, new XC_MethodHook() {
-                @Override protected void afterHookedMethod(MethodHookParam p) {
-                    if (p.hasThrowable()) {
-                        Throwable t = p.getThrowable();
-                        log("g0.g.f THROW: " + t.getClass().getName() + ": " + t.getMessage());
-                    } else {
-                        Object r = p.getResult();
-                        log("g0.g.f RESULT: " + (r instanceof List ? "listSize=" + ((List<?>)r).size() : String.valueOf(r)));
-                    }
-                }
-            });
-            log("hooked g0.g.f(SQLiteDatabase,YellowPage)");
-        } catch (Throwable e) {
-            log("g0.g.f hook failed: " + e.getClass().getName() + ": " + e.getMessage());
-        }
-    }
-
-    private void hookYellowPageInsert(ClassLoader cl) {
-        try {
-            XposedHelpers.findAndHookMethod(SQLiteDatabase.class, "insertWithOnConflict",
-                    String.class, String.class, android.content.ContentValues.class, int.class,
-                    new XC_MethodHook() {
-                        @Override protected void beforeHookedMethod(MethodHookParam p) {
-                            if (p.args != null && p.args.length >= 3 && "yellow_page".equals(p.args[0])) {
-                                android.content.ContentValues v = (android.content.ContentValues)p.args[2];
-                                log("DB INSERT yellow_page values=" + String.valueOf(v));
-                            }
-                        }
-                        @Override protected void afterHookedMethod(MethodHookParam p) {
-                            if (p.args != null && p.args.length >= 1 && "yellow_page".equals(p.args[0])) {
-                                log("DB INSERT yellow_page RESULT=" + p.getResult());
-                            }
-                        }
-                    });
-            log("hooked SQLiteDatabase.insertWithOnConflict(yellow_page)");
-        } catch (Throwable e) {
-            log("SQLite insert hook failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
@@ -212,27 +105,12 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         }
     }
 
-
-    /**
-     * Make the YellowPage process see a mainland-CN MIUI environment.
-     *
-     * Important: do this before any YellowPage classes that cache Build/SystemProperties
-     * values are initialized. We only spoof region/build-flavor properties; Android
-     * SDK/device identity is left untouched so normal platform compatibility checks
-     * keep using the real device.
-     */
     private void hookChinaEnvironment(ClassLoader cl) {
-        // miui.os.Build.IS_INTERNATIONAL_BUILD is a static final field used directly
-        // by many YellowPage classes, so changing only getRegion() is insufficient.
         try {
             Class<?> build = Class.forName("miui.os.Build", false, cl);
             try {
                 XposedHelpers.setStaticBooleanField(build, "IS_INTERNATIONAL_BUILD", false);
-                log("CN ENV: miui.os.Build.IS_INTERNATIONAL_BUILD -> false");
-            } catch (Throwable e) {
-                log("CN ENV: set IS_INTERNATIONAL_BUILD failed: " + e.getClass().getName()
-                        + ": " + e.getMessage());
-            }
+            } catch (Throwable ignored) {}
 
             try {
                 Method getRegion = build.getDeclaredMethod("getRegion");
@@ -241,126 +119,54 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
                         if (!p.hasThrowable()) p.setResult("CN");
                     }
                 });
-                log("CN ENV: hooked miui.os.Build.getRegion() -> CN");
-            } catch (Throwable e) {
-                log("CN ENV: getRegion hook failed: " + e.getClass().getName()
-                        + ": " + e.getMessage());
-            }
+            } catch (Throwable ignored) {}
 
             try {
                 Method checkRegion = build.getDeclaredMethod("checkRegion", String.class);
                 XposedBridge.hookMethod(checkRegion, new XC_MethodHook() {
                     @Override protected void afterHookedMethod(MethodHookParam p) {
-                        if (p.hasThrowable()) return;
-                        Object arg = p.args != null && p.args.length > 0 ? p.args[0] : null;
-                        if (arg instanceof String) {
-                            p.setResult("CN".equalsIgnoreCase((String) arg));
+                        if (!p.hasThrowable() && p.args.length > 0 && p.args[0] instanceof String) {
+                            p.setResult("CN".equalsIgnoreCase((String) p.args[0]));
                         }
                     }
                 });
-                log("CN ENV: hooked miui.os.Build.checkRegion(String)");
-            } catch (Throwable e) {
-                log("CN ENV: checkRegion hook failed: " + e.getClass().getName()
-                        + ": " + e.getMessage());
-            }
-        } catch (Throwable e) {
-            log("CN ENV: miui.os.Build unavailable: " + e.getClass().getName()
-                    + ": " + e.getMessage());
-        }
-
-        // K60 CN identity. On global firmware the same hardware is commonly exposed as
-        // POCO F5 Pro; YellowPage may branch on Build.* identity as well as region.
-        try {
-            Class<?> androidBuild = Class.forName("android.os.Build", false, ClassLoader.getSystemClassLoader());
-            log("CN ENV ORIGINAL Build: MODEL=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "MODEL")) + " DEVICE=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "DEVICE")) + " PRODUCT=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "PRODUCT")) + " BRAND=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "BRAND")) + " MANUFACTURER=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "MANUFACTURER")) + " DISPLAY=" + String.valueOf(XposedHelpers.getStaticObjectField(androidBuild, "DISPLAY")));
-            setStaticString(androidBuild, "MODEL", "23013PC75C");
-            setStaticString(androidBuild, "DEVICE", "mondrian");
-            setStaticString(androidBuild, "PRODUCT", "mondrian");
-            setStaticString(androidBuild, "BRAND", "Redmi");
-            setStaticString(androidBuild, "MANUFACTURER", "Xiaomi");
-            setStaticString(androidBuild, "DISPLAY", "V14.0.0.0.TMNCNXM");
-            log("CN ENV: Android Build identity -> Redmi K60 / mondrian / 23013PC75C");
-        } catch (Throwable e) {
-            log("CN ENV: android.os.Build identity hook failed: " + e.getClass().getName()
-                    + ": " + e.getMessage());
-        }
+            } catch (Throwable ignored) {}
+        } catch (Throwable ignored) {}
 
         hookSystemProperties(ClassLoader.getSystemClassLoader(), "android.os.SystemProperties");
         hookSystemProperties(cl, "miuix.core.util.SystemProperties");
         hookSystemProperties(cl, "miui.cloud.os.SystemProperties");
     }
 
-    private void setStaticString(Class<?> cls, String field, String value) {
-        try {
-            XposedHelpers.setStaticObjectField(cls, field, value);
-            log("CN ENV: Build." + field + " -> " + value);
-        } catch (Throwable e) {
-            log("CN ENV: Build." + field + " failed: " + e.getClass().getName());
-        }
-    }
-
     private void hookSystemProperties(ClassLoader loader, String className) {
         try {
             Class<?> sp = Class.forName(className, false, loader);
-
-            try {
-                XposedHelpers.findAndHookMethod(sp, "get", String.class, new XC_MethodHook() {
-                    @Override protected void afterHookedMethod(MethodHookParam p) {
-                        if (!p.hasThrowable()) {
-                            String key = (String) p.args[0];
-                            String original = (String) p.getResult();
-                            String value = cnProperty(key, original);
-                            if (value != null) {
-                                log("CN ENV READ: " + className + ".get key=" + key + " original=" + String.valueOf(original) + " -> " + value);
-                                p.setResult(value);
+            XposedHelpers.findAndHookMethod(sp, "get", String.class, new XC_MethodHook() {
+                @Override protected void afterHookedMethod(MethodHookParam p) {
+                    if (!p.hasThrowable()) {
+                        String value = cnProperty((String) p.args[0], (String) p.getResult());
+                        if (value != null) p.setResult(value);
+                    }
+                }
+            });
+            XposedHelpers.findAndHookMethod(sp, "get", String.class, String.class,
+                    new XC_MethodHook() {
+                        @Override protected void afterHookedMethod(MethodHookParam p) {
+                            if (!p.hasThrowable()) {
+                                String value = cnProperty((String) p.args[0], (String) p.getResult());
+                                if (value != null) p.setResult(value);
                             }
                         }
-                    }
-                });
-            } catch (Throwable ignored) {}
-
-            try {
-                XposedHelpers.findAndHookMethod(sp, "get", String.class, String.class,
-                        new XC_MethodHook() {
-                            @Override protected void afterHookedMethod(MethodHookParam p) {
-                                if (!p.hasThrowable()) {
-                                    String key = (String) p.args[0];
-                                    String original = (String) p.getResult();
-                                    String value = cnProperty(key, original);
-                                    if (value != null) {
-                                        log("CN ENV READ: " + className + ".get(default) key=" + key + " original=" + String.valueOf(original) + " -> " + value);
-                                        p.setResult(value);
-                                    }
-                                }
+                    });
+            XposedHelpers.findAndHookMethod(sp, "getBoolean", String.class, boolean.class,
+                    new XC_MethodHook() {
+                        @Override protected void afterHookedMethod(MethodHookParam p) {
+                            if (!p.hasThrowable() && isChinaBooleanKey((String) p.args[0])) {
+                                p.setResult(false);
                             }
-                        });
-            } catch (Throwable ignored) {}
-
-            try {
-                XposedHelpers.findAndHookMethod(sp, "getBoolean", String.class, boolean.class,
-                        new XC_MethodHook() {
-                            @Override protected void afterHookedMethod(MethodHookParam p) {
-                                if (!p.hasThrowable() && isChinaBooleanKey((String) p.args[0])) {
-                                    p.setResult(false);
-                                }
-                            }
-                        });
-            } catch (Throwable ignored) {}
-
-            try {
-                XposedHelpers.findAndHookMethod(sp, "getInt", String.class, int.class,
-                        new XC_MethodHook() {
-                            @Override protected void afterHookedMethod(MethodHookParam p) {
-                                // ro.miui.ui.version.code is deliberately left unchanged.
-                                // It is an OS-version compatibility value, not a region flag.
-                            }
-                        });
-            } catch (Throwable ignored) {}
-
-            log("CN ENV: hooked " + className);
-        } catch (Throwable e) {
-            log("CN ENV: " + className + " unavailable: " + e.getClass().getName());
-        }
+                        }
+                    });
+        } catch (Throwable ignored) {}
     }
 
     private boolean isChinaBooleanKey(String key) {
@@ -372,12 +178,8 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         if (key == null) return null;
         if ("ro.miui.region".equals(key)
                 || "ro.product.locale.region".equals(key)
-                || "ro.miui.build.region".equals(key)) {
-            return "CN";
-        }
-        if ("ro.product.locale".equals(key)) {
-            return "zh-CN";
-        }
+                || "ro.miui.build.region".equals(key)) return "CN";
+        if ("ro.product.locale".equals(key)) return "zh-CN";
         if ("ro.product.mod_device".equals(key) && original != null) {
             return original.replaceFirst("(?i)_global$", "")
                     .replaceFirst("(?i)_eea$", "");
@@ -392,18 +194,14 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             XposedHelpers.findAndHookMethod(provider, "onCreate", new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam p) {
                     try {
-                        Context c = (Context)XposedHelpers.callMethod(p.thisObject, "getContext");
-                        log("Provider.onCreate -> checking official data import");
-                        importOfficial(c, "provider_onCreate");
+                        Context c = (Context) XposedHelpers.callMethod(p.thisObject, "getContext");
+                        importOfficial(c, "provider");
                     } catch (Throwable e) {
-                        log("Provider.onCreate hook failed: " + e.getClass().getName() + ": " + e.getMessage());
+                        log("provider hook failed: " + e.getClass().getSimpleName());
                     }
                 }
             });
-            log("hooked YellowPageProvider.onCreate()");
-        } catch (Throwable e) {
-            log("Provider hook failed: " + e.getClass().getName() + ": " + e.getMessage());
-        }
+        } catch (Throwable ignored) {}
     }
 
     private void hookDownload(ClassLoader cl) {
@@ -412,20 +210,12 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             Method n = pull.getDeclaredMethod("n", Context.class, org.json.JSONObject.class);
             XposedBridge.hookMethod(n, new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam p) {
-                    if (p.hasThrowable()) {
-                        Throwable t = p.getThrowable();
-                        log("p0.d.n THROW: " + t.getClass().getName() + ": " + t.getMessage());
-                        return;
-                    }
                     Context c = p.args != null && p.args.length > 0 && p.args[0] instanceof Context
-                            ? (Context)p.args[0] : null;
-                    importOfficial(c, "p0.d.n_after_download");
+                            ? (Context) p.args[0] : null;
+                    importOfficial(c, "download");
                 }
             });
-            log("hooked p0.d.n(Context,JSONObject) -> official N()");
-        } catch (Throwable e) {
-            log("p0.d.n hook failed: " + e.getClass().getName() + ": " + e.getMessage());
-        }
+        } catch (Throwable ignored) {}
     }
 
     private void hookReleaseTask(ClassLoader cl) {
@@ -435,19 +225,15 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             XposedBridge.hookMethod(b, new XC_MethodHook() {
                 @Override protected void afterHookedMethod(MethodHookParam p) {
                     Context c = p.args != null && p.args.length > 0 && p.args[0] instanceof Context
-                            ? (Context)p.args[0] : null;
-                    importOfficial(c, "YellowPageReleaseTask_after");
+                            ? (Context) p.args[0] : null;
+                    importOfficial(c, "release");
                 }
             });
-            log("hooked i0.c.b(Context,SQLiteDatabase)");
-        } catch (Throwable e) {
-            log("release task hook failed: " + e.getClass().getName() + ": " + e.getMessage());
-        }
+        } catch (Throwable ignored) {}
     }
 
     @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
         if (!PACKAGE.equals(lpparam.packageName)) return;
-        log("loaded");
         hookChinaEnvironment(lpparam.classLoader);
         hookProvider(lpparam.classLoader);
         hookDownload(lpparam.classLoader);
