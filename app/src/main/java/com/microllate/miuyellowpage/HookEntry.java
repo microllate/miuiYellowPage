@@ -2972,6 +2972,8 @@ hookMeteredNetworkGuard(cl);
 
     private static void triggerOfficialYellowPageImport(Context context, ClassLoader cl) {
         try {
+            hookOfficialImportFileChecks(cl);
+
             Class<?> helperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
                     false, cl);
