@@ -242,9 +242,34 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
                     + ": " + e.getMessage());
         }
 
+        // K60 CN identity. On global firmware the same hardware is commonly exposed as
+        // POCO F5 Pro; YellowPage may branch on Build.* identity as well as region.
+        try {
+            Class<?> androidBuild = Class.forName("android.os.Build", false, ClassLoader.getSystemClassLoader());
+            setStaticString(androidBuild, "MODEL", "23013PC75C");
+            setStaticString(androidBuild, "DEVICE", "mondrian");
+            setStaticString(androidBuild, "PRODUCT", "mondrian");
+            setStaticString(androidBuild, "BRAND", "Redmi");
+            setStaticString(androidBuild, "MANUFACTURER", "Xiaomi");
+            setStaticString(androidBuild, "DISPLAY", "V14.0.0.0.TMNCNXM");
+            log("CN ENV: Android Build identity -> Redmi K60 / mondrian / 23013PC75C");
+        } catch (Throwable e) {
+            log("CN ENV: android.os.Build identity hook failed: " + e.getClass().getName()
+                    + ": " + e.getMessage());
+        }
+
         hookSystemProperties(ClassLoader.getSystemClassLoader(), "android.os.SystemProperties");
         hookSystemProperties(cl, "miuix.core.util.SystemProperties");
         hookSystemProperties(cl, "miui.cloud.os.SystemProperties");
+    }
+
+    private void setStaticString(Class<?> cls, String field, String value) {
+        try {
+            XposedHelpers.setStaticObjectField(cls, field, value);
+            log("CN ENV: Build." + field + " -> " + value);
+        } catch (Throwable e) {
+            log("CN ENV: Build." + field + " failed: " + e.getClass().getName());
+        }
     }
 
     private void hookSystemProperties(ClassLoader loader, String className) {
