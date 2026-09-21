@@ -186,6 +186,145 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         }
     }
 
+
+    /**
+     * Make the YellowPage process see a mainland-CN MIUI environment.
+     *
+     * Important: do this before any YellowPage classes that cache Build/SystemProperties
+     * values are initialized. We only spoof region/build-flavor properties; Android
+     * SDK/device identity is left untouched so normal platform compatibility checks
+     * keep using the real device.
+     */
+    private void hookChinaEnvironment(ClassLoader cl) {
+        // miui.os.Build.IS_INTERNATIONAL_BUILD is a static final field used directly
+        // by many YellowPage classes, so changing only getRegion() is insufficient.
+        try {
+            Class<?> build = Class.forName("miui.os.Build", false, cl);
+            try {
+                XposedHelpers.setStaticBooleanField(build, "IS_INTERNATIONAL_BUILD", false);
+                log("CN ENV: miui.os.Build.IS_INTERNATIONAL_BUILD -> false");
+            } catch (Throwable e) {
+                log("CN ENV: set IS_INTERNATIONAL_BUILD failed: " + e.getClass().getName()
+                        + ": " + e.getMessage());
+            }
+
+            try {
+                Method getRegion = build.getDeclaredMethod("getRegion");
+                XposedBridge.hookMethod(getRegion, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam p) {
+                        if (!p.hasThrowable()) p.setResult("CN");
+                    }
+                });
+                log("CN ENV: hooked miui.os.Build.getRegion() -> CN");
+            } catch (Throwable e) {
+                log("CN ENV: getRegion hook failed: " + e.getClass().getName()
+                        + ": " + e.getMessage());
+            }
+
+            try {
+                Method checkRegion = build.getDeclaredMethod("checkRegion", String.class);
+                XposedBridge.hookMethod(checkRegion, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam p) {
+                        if (p.hasThrowable()) return;
+                        Object arg = p.args != null && p.args.length > 0 ? p.args[0] : null;
+                        if (arg instanceof String) {
+                            p.setResult("CN".equalsIgnoreCase((String) arg));
+                        }
+                    }
+                });
+                log("CN ENV: hooked miui.os.Build.checkRegion(String)");
+            } catch (Throwable e) {
+                log("CN ENV: checkRegion hook failed: " + e.getClass().getName()
+                        + ": " + e.getMessage());
+            }
+        } catch (Throwable e) {
+            log("CN ENV: miui.os.Build unavailable: " + e.getClass().getName()
+                    + ": " + e.getMessage());
+        }
+
+        hookSystemProperties(ClassLoader.getSystemClassLoader(), "android.os.SystemProperties");
+        hookSystemProperties(cl, "miuix.core.util.SystemProperties");
+        hookSystemProperties(cl, "miui.cloud.os.SystemProperties");
+    }
+
+    private void hookSystemProperties(ClassLoader loader, String className) {
+        try {
+            Class<?> sp = Class.forName(className, false, loader);
+
+            try {
+                XposedHelpers.findAndHookMethod(sp, "get", String.class, new XC_MethodHook() {
+                    @Override protected void afterHookedMethod(MethodHookParam p) {
+                        if (!p.hasThrowable()) {
+                            String key = (String) p.args[0];
+                            String value = cnProperty(key, (String) p.getResult());
+                            if (value != null) p.setResult(value);
+                        }
+                    }
+                });
+            } catch (Throwable ignored) {}
+
+            try {
+                XposedHelpers.findAndHookMethod(sp, "get", String.class, String.class,
+                        new XC_MethodHook() {
+                            @Override protected void afterHookedMethod(MethodHookParam p) {
+                                if (!p.hasThrowable()) {
+                                    String key = (String) p.args[0];
+                                    String value = cnProperty(key, (String) p.getResult());
+                                    if (value != null) p.setResult(value);
+                                }
+                            }
+                        });
+            } catch (Throwable ignored) {}
+
+            try {
+                XposedHelpers.findAndHookMethod(sp, "getBoolean", String.class, boolean.class,
+                        new XC_MethodHook() {
+                            @Override protected void afterHookedMethod(MethodHookParam p) {
+                                if (!p.hasThrowable() && isChinaBooleanKey((String) p.args[0])) {
+                                    p.setResult(false);
+                                }
+                            }
+                        });
+            } catch (Throwable ignored) {}
+
+            try {
+                XposedHelpers.findAndHookMethod(sp, "getInt", String.class, int.class,
+                        new XC_MethodHook() {
+                            @Override protected void afterHookedMethod(MethodHookParam p) {
+                                // ro.miui.ui.version.code is deliberately left unchanged.
+                                // It is an OS-version compatibility value, not a region flag.
+                            }
+                        });
+            } catch (Throwable ignored) {}
+
+            log("CN ENV: hooked " + className);
+        } catch (Throwable e) {
+            log("CN ENV: " + className + " unavailable: " + e.getClass().getName());
+        }
+    }
+
+    private boolean isChinaBooleanKey(String key) {
+        return "ro.miui.is_international_build".equals(key)
+                || "ro.miui.is_global_build".equals(key);
+    }
+
+    private String cnProperty(String key, String original) {
+        if (key == null) return null;
+        if ("ro.miui.region".equals(key)
+                || "ro.product.locale.region".equals(key)
+                || "ro.miui.build.region".equals(key)) {
+            return "CN";
+        }
+        if ("ro.product.locale".equals(key)) {
+            return "zh-CN";
+        }
+        if ("ro.product.mod_device".equals(key) && original != null) {
+            return original.replaceFirst("(?i)_global$", "")
+                    .replaceFirst("(?i)_eea$", "");
+        }
+        return null;
+    }
+
     private void hookProvider(ClassLoader cl) {
         try {
             Class<?> provider = Class.forName(
@@ -249,6 +388,7 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
         if (!PACKAGE.equals(lpparam.packageName)) return;
         log("loaded");
+        hookChinaEnvironment(lpparam.classLoader);
         hookProvider(lpparam.classLoader);
         hookDownload(lpparam.classLoader);
         hookReleaseTask(lpparam.classLoader);
