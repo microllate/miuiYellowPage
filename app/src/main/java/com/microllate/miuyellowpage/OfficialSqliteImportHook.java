@@ -8,7 +8,6 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -18,10 +17,12 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Calls the real YellowPageDatabaseHelper.N() after opening the EEA preset gate.
+ * Calls the real YellowPageDatabaseHelper.N() after bypassing the EEA preset gate.
  *
- * N() first checks r0.c.n().l(context). On the international/EEA build this
- * returns false, so N() exits before it ever reads yellow_pages.dat.
+ * N() first checks r0.c.n().l(context). We do NOT call r0.c.n() ourselves:
+ * we hook the actual l(Context) method directly. Therefore the original
+ * r0.c.n().l(context) call made inside N() is forced to true regardless of
+ * how the obfuscated singleton factory is resolved by reflection helpers.
  */
 public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.yellowpage";
@@ -34,28 +35,6 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + ": OFFICIAL IMPORT FIX: " + message);
         } catch (Throwable ignored) {
         }
-    }
-
-    /**
-     * Do not use XposedHelpers.callStaticMethod("n") here.
-     * On this obfuscated build that lookup can throw NoSuchMethodError even
-     * though the zero-argument static method is present. Resolve it directly
-     * from the loaded class and invoke it reflectively.
-     */
-    private Method findZeroArgStatic(Class<?> start, String name) {
-        Class<?> owner = start;
-        while (owner != null && owner != Object.class) {
-            for (Method m : owner.getDeclaredMethods()) {
-                if (name.equals(m.getName())
-                        && m.getParameterTypes().length == 0
-                        && Modifier.isStatic(m.getModifiers())) {
-                    m.setAccessible(true);
-                    return m;
-                }
-            }
-            owner = owner.getSuperclass();
-        }
-        return null;
     }
 
     private Method findContextMethod(Class<?> start, String name) {
@@ -75,26 +54,15 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         return null;
     }
 
-    private void forceOfficialPresetGate(ClassLoader cl, Context context) {
+    private void forceOfficialPresetGate(ClassLoader cl) {
         try {
             Class<?> preset = Class.forName("r0.c", false, cl);
 
-            Method singletonFactory = findZeroArgStatic(preset, "n");
-            if (singletonFactory == null) {
-                log("PRESET GATE: r0.c zero-arg static n() not found; methods="
-                        + preset.getDeclaredMethods().length);
-                return;
-            }
-
-            Object singleton = singletonFactory.invoke(null);
-            if (singleton == null) {
-                log("PRESET GATE: r0.c.n() returned null");
-                return;
-            }
-
+            // Do not resolve/call r0.c.n(). This is the point where the
+            // previous implementation hit NoSuchMethodError.
             Method gate = findContextMethod(preset, "l");
             if (gate == null) {
-                log("PRESET GATE: r0.c.n().l(Context) not found");
+                log("PRESET GATE FAILED: r0.c.l(Context) not found");
                 return;
             }
 
@@ -108,10 +76,7 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             });
 
             log("PRESET GATE HOOKED: " + gate.getDeclaringClass().getName()
-                    + "." + gate.getName() + "(Context) -> true");
-
-            Object result = gate.invoke(singleton, context);
-            log("PRESET GATE VERIFY: r0.c.n().l(Context)=" + String.valueOf(result));
+                    + ".l(Context) -> true");
         } catch (Throwable e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
             log("PRESET GATE FAILED: " + cause.getClass().getName()
@@ -139,7 +104,8 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         try {
             ClassLoader cl = app.getClassLoader();
 
-            forceOfficialPresetGate(cl, app);
+            // Make the original N() see the EEA preset as available.
+            forceOfficialPresetGate(cl);
 
             Class<?> helperClass = Class.forName(
                     "com.miui.yellowpage.providers.yellowpage.YellowPageDatabaseHelper",
