@@ -39,7 +39,7 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
         }
     }
 
-    private static void hookMiuiBuild(ClassLoader cl) {
+    private static void hookMiuiBuild(ClassLoader cl) throws Throwable {
         Class<?> build = Class.forName("miui.os.Build", false, cl);
 
         // The CN Contacts APK uses this flag through SystemUtil.T().
