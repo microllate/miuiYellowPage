@@ -136,9 +136,34 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             } catch (Throwable ignored) {}
         } catch (Throwable ignored) {}
 
+        hookAndroidBuild();
         hookSystemProperties(ClassLoader.getSystemClassLoader(), "android.os.SystemProperties");
         hookSystemProperties(cl, "miuix.core.util.SystemProperties");
         hookSystemProperties(cl, "miui.cloud.os.SystemProperties");
+    }
+
+    private void hookAndroidBuild() {
+        try {
+            Class<?> build = Class.forName("android.os.Build", false,
+                    ClassLoader.getSystemClassLoader());
+            setStaticString(build, "MODEL", "23013RK75C");
+            setStaticString(build, "MANUFACTURER", "Xiaomi");
+            setStaticString(build, "BRAND", "Redmi");
+            setStaticString(build, "DEVICE", "mondrian");
+            setStaticString(build, "PRODUCT", "mondrian");
+            log("android.os.Build identity -> Redmi K60 / 23013RK75C / mondrian");
+        } catch (Throwable e) {
+            log("android.os.Build hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
+    private void setStaticString(Class<?> cls, String fieldName, String value) {
+        try {
+            XposedHelpers.setStaticObjectField(cls, fieldName, value);
+            log(fieldName + " -> " + value);
+        } catch (Throwable e) {
+            log(fieldName + " set failed: " + e.getClass().getSimpleName());
+        }
     }
 
     private void hookSystemProperties(ClassLoader loader, String className) {
@@ -181,12 +206,21 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
         if (key == null) return null;
         if ("ro.miui.region".equals(key)
                 || "ro.product.locale.region".equals(key)
-                || "ro.miui.build.region".equals(key)) return "CN";
+                || "ro.miui.build.region".equals(key)
+                || "ro.miui.customized.region".equals(key)) return "CN";
         if ("ro.product.locale".equals(key)) return "zh-CN";
-        if ("ro.product.mod_device".equals(key) && original != null) {
-            return original.replaceFirst("(?i)_global$", "")
-                    .replaceFirst("(?i)_eea$", "");
-        }
+
+        if ("ro.product.model".equals(key)
+                || "ro.product.odm.model".equals(key)
+                || "ro.product.odm.cert".equals(key)) return "23013RK75C";
+        if ("ro.product.marketname".equals(key)) return "Redmi K60";
+        if ("ro.product.name".equals(key)
+                || "ro.product.device".equals(key)
+                || "ro.product.mod_device".equals(key)) return "mondrian";
+        if ("ro.product.brand".equals(key)) return "Redmi";
+
+        if ("ro.miui.is_international_build".equals(key)
+                || "ro.miui.is_global_build".equals(key)) return "0";
         return null;
     }
 
