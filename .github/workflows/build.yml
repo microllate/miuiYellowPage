@@ -50,8 +50,19 @@ jobs:
           # Multiple IXposedHookLoadPackage classes are valid: Xposed/LSPosed
           # loads each non-empty line from assets/xposed_init.
           ENTRY=$(unzip -p "$APK" assets/xposed_init | tr -d '\r')
-          printf '%s\n' "$ENTRY" | grep -Fxq 'com.microllate.miuyellowpage.HookEntry'
-          printf '%s\n' "$ENTRY" | grep -Fxq 'com.microllate.miuyellowpage.OfficialSqliteImportHook'
+
+          EXPECTED_ENTRIES=(
+            'com.microllate.miuyellowpage.HookEntry'
+            'com.microllate.miuyellowpage.OfficialSqliteImportHook'
+            'com.microllate.miuyellowpage.ContactsChinaEnvironmentHook'
+            'com.microllate.miuyellowpage.SecurityCenterChinaEnvironmentHook'
+            'com.microllate.miuyellowpage.YellowPagePrivacyCenterCompatHook'
+          )
+
+          for EXPECTED in "${EXPECTED_ENTRIES[@]}"; do
+            printf '%s\n' "$ENTRY" | grep -Fxq "$EXPECTED"
+          done
+
           if printf '%s\n' "$ENTRY" | grep -Fq 'YellowPageHook'; then
             echo "ERROR: legacy YellowPageHook entry found"
             exit 1
@@ -65,27 +76,31 @@ jobs:
           echo "Relevant DEX strings:"
           for DEX in $(unzip -Z1 "$APK" 'classes*.dex'); do
             echo "--- $DEX ---"
-            unzip -p "$APK" "$DEX" | strings | grep -E 'HookEntry|OfficialSqliteImportHook|YellowPageHook|miu-iYellowPage' || true
+            unzip -p "$APK" "$DEX" | strings | grep -E 'HookEntry|OfficialSqliteImportHook|ContactsChinaEnvironmentHook|SecurityCenterChinaEnvironmentHook|YellowPagePrivacyCenterCompatHook|YellowPageHook|miu-iYellowPage' || true
           done
 
           FOUND_HOOK=0
           FOUND_IMPORT=0
+          FOUND_CONTACTS=0
+          FOUND_SECURITYCENTER=0
+          FOUND_PRIVACY=0
           FOUND_LEGACY=0
+
           while IFS= read -r DEX; do
             STRINGS=$(unzip -p "$APK" "$DEX" | strings || true)
-            if printf '%s\n' "$STRINGS" | grep -Fq 'HookEntry'; then
-              FOUND_HOOK=1
-            fi
-            if printf '%s\n' "$STRINGS" | grep -Fq 'OfficialSqliteImportHook'; then
-              FOUND_IMPORT=1
-            fi
-            if printf '%s\n' "$STRINGS" | grep -Fq 'YellowPageHook'; then
-              FOUND_LEGACY=1
-            fi
+            printf '%s\n' "$STRINGS" | grep -Fq 'HookEntry' && FOUND_HOOK=1 || true
+            printf '%s\n' "$STRINGS" | grep -Fq 'OfficialSqliteImportHook' && FOUND_IMPORT=1 || true
+            printf '%s\n' "$STRINGS" | grep -Fq 'ContactsChinaEnvironmentHook' && FOUND_CONTACTS=1 || true
+            printf '%s\n' "$STRINGS" | grep -Fq 'SecurityCenterChinaEnvironmentHook' && FOUND_SECURITYCENTER=1 || true
+            printf '%s\n' "$STRINGS" | grep -Fq 'YellowPagePrivacyCenterCompatHook' && FOUND_PRIVACY=1 || true
+            printf '%s\n' "$STRINGS" | grep -Fq 'YellowPageHook' && FOUND_LEGACY=1 || true
           done < <(unzip -Z1 "$APK" 'classes*.dex')
 
           test "$FOUND_HOOK" -eq 1
           test "$FOUND_IMPORT" -eq 1
+          test "$FOUND_CONTACTS" -eq 1
+          test "$FOUND_SECURITYCENTER" -eq 1
+          test "$FOUND_PRIVACY" -eq 1
           test "$FOUND_LEGACY" -eq 0
 
           echo
