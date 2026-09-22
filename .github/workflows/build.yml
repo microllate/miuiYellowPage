@@ -57,7 +57,6 @@ jobs:
             'com.microllate.miuyellowpage.ContactsChinaEnvironmentHook'
             'com.microllate.miuyellowpage.SecurityCenterChinaEnvironmentHook'
             'com.microllate.miuyellowpage.YellowPagePrivacyCenterCompatHook'
-            'com.microllate.miuyellowpage.GameTurboNormalModelCompatHook'
           )
 
           for EXPECTED in "${EXPECTED_ENTRIES[@]}"; do
