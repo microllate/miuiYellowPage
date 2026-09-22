@@ -1,6 +1,5 @@
 package com.microllate.miuyellowpage;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -46,8 +45,7 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
         // The CN Contacts APK uses this flag through SystemUtil.T().
         setStaticBoolean(build, "IS_INTERNATIONAL_BUILD", false);
 
-        // Keep the current hardware/device identity; only make the region/build
-        // classification CN. This avoids pretending to be a different phone model.
+        // Make the Contacts process use the CN device/region classification.
         try {
             setStaticBoolean(build, "IS_CM_CUSTOMIZATION_TEST", false);
         } catch (Throwable ignored) {
@@ -215,6 +213,7 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
                 return "Redmi K60";
 
             case "ro.product.name":
+            case "ro.product.device":
                 return "mondrian";
 
             case "ro.product.mod_device":
@@ -223,12 +222,6 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
             case "ro.product.brand":
                 return "Redmi";
 
-            case "ro.build.fingerprint":
-            case "ro.odm.build.fingerprint":
-                return "Redmi/mondrian/mondrian:12/SKQ1.230401.001/OS3.0.4.0.VMNCNXM:user/release-keys";
-
-            case "ro.build.description":
-                return "missi-user 15 AQ3A.250226.002 OS3.0.4.0.VMNCNXM release-keys";
 
             case "ro.miui.is_international_build":
             case "ro.miui.is_global_build":
