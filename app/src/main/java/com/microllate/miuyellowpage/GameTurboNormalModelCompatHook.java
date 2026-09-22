@@ -27,7 +27,7 @@ public final class GameTurboNormalModelCompatHook implements IXposedHookLoadPack
 
         try {
             install(lpparam.classLoader);
-            log("GameTurbo normal-model compatibility installed");
+            log("installed");
         } catch (Throwable e) {
             log("GameTurbo normal-model compatibility failed: "
                     + e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -119,13 +119,13 @@ public final class GameTurboNormalModelCompatHook implements IXposedHookLoadPack
 
                             param.setResult(adapted);
 
-                            log("U() normal-model adapter: source="
-                                    + source.size()
-                                    + " nonHot=" + nonHot.size()
-                                    + " result=" + adapted.size()
-                                    + " compositeChildren=" + nonHot.size());
+                            log("adapted Q6.k.U(): source=" + source.size()
+                                    + ", hot=" + (source.size() - nonHot.size())
+                                    + ", normal=" + nonHot.size()
+                                    + ", result=" + adapted.size()
+                                    + ", wrapped=COMPOSITE");
                         } catch (Throwable e) {
-                            log("U() normal-model adapter failed: "
+                            log("Q6.k.U() adaptation failed: "
                                     + e.getClass().getSimpleName() + ": "
                                     + e.getMessage());
                         }
