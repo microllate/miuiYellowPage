@@ -97,43 +97,39 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
 
     private static void hookGet(Class<?> sp, Class<?>... parameterTypes) {
         try {
-            XposedHelpers.findAndHookMethod(sp, "get", parameterTypes,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (param.hasThrowable() || param.args == null
-                                    || param.args.length == 0
-                                    || !(param.args[0] instanceof String)) return;
+            XposedBridge.hookAllMethods(sp, "get", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable() || param.args == null
+                            || param.args.length == 0
+                            || !(param.args[0] instanceof String)) return;
 
-                            String value = cnProperty((String) param.args[0]);
-                            if (value != null) param.setResult(value);
-                        }
-                    });
+                    String value = cnProperty((String) param.args[0]);
+                    if (value != null) param.setResult(value);
+                }
+            });
         } catch (Throwable e) {
-            log("SystemProperties.get hook failed: "
-                    + e.getClass().getSimpleName());
+            log("SystemProperties.get hook failed: " + e.getClass().getSimpleName());
         }
     }
 
     private static void hookGetBoolean(Class<?> sp) {
         try {
-            XposedHelpers.findAndHookMethod(sp, "getBoolean",
-                    String.class, boolean.class, new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (param.hasThrowable() || param.args == null
-                                    || param.args.length == 0) return;
+            XposedBridge.hookAllMethods(sp, "getBoolean", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable() || param.args == null
+                            || param.args.length == 0) return;
 
-                            String key = String.valueOf(param.args[0]);
-                            if ("ro.miui.is_international_build".equals(key)
-                                    || "ro.miui.is_global_build".equals(key)) {
-                                param.setResult(false);
-                            }
-                        }
-                    });
+                    String key = String.valueOf(param.args[0]);
+                    if ("ro.miui.is_international_build".equals(key)
+                            || "ro.miui.is_global_build".equals(key)) {
+                        param.setResult(false);
+                    }
+                }
+            });
         } catch (Throwable e) {
-            log("SystemProperties.getBoolean hook failed: "
-                    + e.getClass().getSimpleName());
+            log("SystemProperties.getBoolean hook failed: " + e.getClass().getSimpleName());
         }
     }
 
