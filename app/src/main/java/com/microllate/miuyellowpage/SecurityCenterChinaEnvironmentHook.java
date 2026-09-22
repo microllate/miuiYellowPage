@@ -67,7 +67,6 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
                 log("checkRegion hook failed: " + e.getClass().getSimpleName());
             }
 
-            log("MIUI Build flags -> INTERNATIONAL=false GLOBAL=false");
         } catch (Throwable e) {
             log("miui.os.Build hook failed: " + e.getClass().getSimpleName());
         }
@@ -93,7 +92,6 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
                             }
                         }
                     });
-            log("Locale.getDefault -> zh-CN");
         } catch (Throwable e) {
             log("Locale hook failed: " + e.getClass().getSimpleName());
         }
@@ -104,7 +102,6 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
             Class<?> utils = XposedHelpers.findClass("miui.yellowpage.YellowPageUtils", cl);
             hookBooleanMethod(utils, "isYellowPageAvailable", true);
             hookBooleanMethod(utils, "isYellowPageEnable", true);
-            log("YellowPageUtils -> available=true enable=true");
         } catch (Throwable e) {
             log("YellowPageUtils hook failed: " + e.getClass().getSimpleName());
         }
