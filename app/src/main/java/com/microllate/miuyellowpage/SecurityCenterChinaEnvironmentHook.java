@@ -21,6 +21,8 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
         try {
             hookMiuiBuild(lpparam.classLoader);
             hookSystemProperties();
+            hookDefaultLocale();
+            hookYellowPageUtils(lpparam.classLoader);
             log("installed");
         } catch (Throwable e) {
             log("install failed: " + e.getClass().getSimpleName()
@@ -77,6 +79,47 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
         } catch (Throwable e) {
             log(field + " -> " + value + " failed: "
                     + e.getClass().getSimpleName());
+        }
+    }
+
+    private static void hookDefaultLocale() {
+        try {
+            XposedHelpers.findAndHookMethod(java.util.Locale.class, "getDefault",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            if (!param.hasThrowable()) {
+                                param.setResult(java.util.Locale.SIMPLIFIED_CHINESE);
+                            }
+                        }
+                    });
+            log("Locale.getDefault -> zh-CN");
+        } catch (Throwable e) {
+            log("Locale hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
+    private static void hookYellowPageUtils(ClassLoader cl) {
+        try {
+            Class<?> utils = XposedHelpers.findClass("miui.yellowpage.YellowPageUtils", cl);
+            hookBooleanMethod(utils, "isYellowPageAvailable", true);
+            hookBooleanMethod(utils, "isYellowPageEnable", true);
+            log("YellowPageUtils -> available=true enable=true");
+        } catch (Throwable e) {
+            log("YellowPageUtils hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
+    private static void hookBooleanMethod(Class<?> cls, String method, final boolean result) {
+        try {
+            XposedBridge.hookAllMethods(cls, method, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (!param.hasThrowable()) param.setResult(result);
+                }
+            });
+        } catch (Throwable e) {
+            log(method + " hook failed: " + e.getClass().getSimpleName());
         }
     }
 
