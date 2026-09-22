@@ -23,6 +23,7 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
             hookSystemProperties();
             hookDefaultLocale();
             hookYellowPageUtils(lpparam.classLoader);
+            GameTurboNormalModelCompatHook.install(lpparam.classLoader);
             log("installed");
         } catch (Throwable e) {
             log("install failed: " + e.getClass().getSimpleName()
