@@ -1,28 +1,30 @@
 package com.microllate.miuyellowpage;
 
-import android.os.Build;
-
+import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
  * Makes only SecurityCenter see a CN Xiaomi/MIUI environment.
  * Hardware model identity is preserved; only regional/build classification is changed.
  */
-public final class SecurityCenterChinaEnvironmentHook {
+public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoadPackage {
+    private static final String PACKAGE = "com.miui.securitycenter";
     private static final String TAG = "miu-iYellowPage";
 
-    private SecurityCenterChinaEnvironmentHook() {}
+    @Override
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
+        if (!PACKAGE.equals(lpparam.packageName)) return;
 
-    public static void install(ClassLoader cl) {
         try {
-            hookMiuiBuild(cl);
+            hookMiuiBuild(lpparam.classLoader);
             hookSystemProperties();
-            log("SecurityCenter CN environment hook installed");
+            log("installed");
         } catch (Throwable e) {
-            log("SecurityCenter CN environment hook failed: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage());
+            log("install failed: " + e.getClass().getSimpleName()
+                    + ": " + e.getMessage());
         }
     }
 
@@ -44,8 +46,7 @@ public final class SecurityCenterChinaEnvironmentHook {
                             }
                         });
             } catch (Throwable e) {
-                log("miui.os.Build.getRegion hook failed: "
-                        + e.getClass().getSimpleName());
+                log("getRegion hook failed: " + e.getClass().getSimpleName());
             }
 
             try {
@@ -61,8 +62,7 @@ public final class SecurityCenterChinaEnvironmentHook {
                             }
                         });
             } catch (Throwable e) {
-                log("miui.os.Build.checkRegion hook failed: "
-                        + e.getClass().getSimpleName());
+                log("checkRegion hook failed: " + e.getClass().getSimpleName());
             }
 
             log("MIUI Build flags -> INTERNATIONAL=false GLOBAL=false");
@@ -145,14 +145,11 @@ public final class SecurityCenterChinaEnvironmentHook {
             case "ro.product.locale.region":
             case "ro.product.country.region":
                 return "CN";
-
             case "ro.product.locale":
                 return "zh-CN";
-
             case "ro.miui.is_international_build":
             case "ro.miui.is_global_build":
                 return "0";
-
             default:
                 return null;
         }
