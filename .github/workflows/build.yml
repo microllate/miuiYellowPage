@@ -60,10 +60,15 @@ jobs:
           )
 
           for EXPECTED in "${EXPECTED_ENTRIES[@]}"; do
-            printf '%s\n' "$ENTRY" | grep -Fxq "$EXPECTED"
+            if ! printf '%s\n' "$ENTRY" | grep -Fxq "$EXPECTED"; then
+              echo "ERROR: missing Xposed entry: $EXPECTED"
+              echo "Actual xposed_init entries:"
+              printf '%s\n' "$ENTRY"
+              exit 1
+            fi
           done
 
-          if printf '%s\n' "$ENTRY" | grep -Fq 'YellowPageHook'; then
+          if printf '%s\n' "$ENTRY" | grep -Fxq 'com.microllate.miuyellowpage.YellowPageHook'; then
             echo "ERROR: legacy YellowPageHook entry found"
             exit 1
           fi
@@ -97,6 +102,17 @@ jobs:
             printf '%s\n' "$STRINGS" | grep -Fq 'GameTurboNormalModelCompatHook' && FOUND_GAME_TURBO=1 || true
             printf '%s\n' "$STRINGS" | grep -Fq 'YellowPageHook' && FOUND_LEGACY=1 || true
           done < <(unzip -Z1 "$APK" 'classes*.dex')
+
+          for CHECK in \
+            "FOUND_HOOK=$FOUND_HOOK" \
+            "FOUND_IMPORT=$FOUND_IMPORT" \
+            "FOUND_CONTACTS=$FOUND_CONTACTS" \
+            "FOUND_SECURITYCENTER=$FOUND_SECURITYCENTER" \
+            "FOUND_PRIVACY=$FOUND_PRIVACY" \
+            "FOUND_GAME_TURBO=$FOUND_GAME_TURBO" \
+            "FOUND_LEGACY=$FOUND_LEGACY"; do
+            echo "$CHECK"
+          done
 
           test "$FOUND_HOOK" -eq 1
           test "$FOUND_IMPORT" -eq 1
