@@ -59,7 +59,6 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
                     if (!param.hasThrowable()) param.setResult("CN");
                 }
             });
-            log("hooked miui.os.Build.getRegion -> CN");
         } catch (Throwable e) {
             log("getRegion hook failed: " + e.getClass().getSimpleName());
         }
@@ -76,7 +75,6 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
                     }
                 }
             });
-            log("hooked miui.os.Build.checkRegion");
         } catch (Throwable e) {
             log("checkRegion hook failed: " + e.getClass().getSimpleName());
         }
@@ -85,7 +83,6 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
     private static void setStaticBoolean(Class<?> cls, String fieldName, boolean value) {
         try {
             XposedHelpers.setStaticBooleanField(cls, fieldName, value);
-            log(fieldName + " -> " + value);
         } catch (Throwable e) {
             log(fieldName + " set failed: " + e.getClass().getSimpleName());
         }
@@ -105,7 +102,7 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
             setStaticString(build, "BRAND", "Redmi");
             setStaticString(build, "DEVICE", "mondrian");
             setStaticString(build, "PRODUCT", "mondrian");
-            log("android.os.Build identity -> Redmi K60 / 23013RK75C / mondrian");
+            log("CN device identity -> Redmi K60 / 23013RK75C / mondrian");
         } catch (Throwable e) {
             log("android.os.Build hook failed: " + e.getClass().getSimpleName());
         }
@@ -147,7 +144,6 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
                             if (value != null) param.setResult(value);
                         }
                     });
-            log("hooked android.os.SystemProperties.get(String)");
         } catch (Throwable e) {
             log("get(String) hook failed: " + e.getClass().getSimpleName());
         }
@@ -165,7 +161,6 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
                             if (value != null) param.setResult(value);
                         }
                     });
-            log("hooked android.os.SystemProperties.get(String,String)");
         } catch (Throwable e) {
             log("get(String,String) hook failed: " + e.getClass().getSimpleName());
         }
@@ -185,7 +180,6 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
                             }
                         }
                     });
-            log("hooked android.os.SystemProperties.getBoolean");
         } catch (Throwable e) {
             log("getBoolean hook failed: " + e.getClass().getSimpleName());
         }
