@@ -2,3 +2,4 @@ com.microllate.miuyellowpage.HookEntry
 com.microllate.miuyellowpage.OfficialSqliteImportHook
 com.microllate.miuyellowpage.ContactsChinaEnvironmentHook
 com.microllate.miuyellowpage.SecurityCenterChinaEnvironmentHook
+com.microllate.miuyellowpage.YellowPagePrivacyCenterCompatHook
