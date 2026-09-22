@@ -34,7 +34,7 @@ public final class GameTurboNormalModelCompatHook implements IXposedHookLoadPack
         }
     }
 
-    private static void install(ClassLoader cl) {
+    public static void install(ClassLoader cl) {
         final Class<?> kClass = XposedHelpers.findClass("Q6.k", cl);
         final Class<?> nClass = XposedHelpers.findClass(
                 "com.miui.gamebooster.model.n", cl);
