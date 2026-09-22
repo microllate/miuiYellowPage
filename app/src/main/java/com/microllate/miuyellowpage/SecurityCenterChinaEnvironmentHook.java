@@ -7,11 +7,18 @@ import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Makes only SecurityCenter see a CN Xiaomi/MIUI environment.
- * Hardware model identity is preserved; only regional/build classification is changed.
+ * Enables the Yellow Page API path inside SecurityCenter without spoofing the
+ * whole device/ROM region.
+ *
+ * SecurityCenter contains Game Turbo, AntiSpam and other global/CN-specific
+ * code paths. Spoofing miui.os.Build.IS_INTERNATIONAL_BUILD, Locale and
+ * SystemProperties globally makes those unrelated components take CN-only
+ * branches on an EEA ROM. The Yellow Page integration itself only needs the
+ * YellowPageUtils availability/enable checks to be true.
  */
 public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.securitycenter";
+    private static final String YELLOW_PAGE_UTILS = "miui.yellowpage.YellowPageUtils";
     private static final String TAG = "miu-iYellowPage";
 
     @Override
@@ -19,87 +26,17 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
         if (!PACKAGE.equals(lpparam.packageName)) return;
 
         try {
-            hookMiuiBuild(lpparam.classLoader);
-            hookSystemProperties();
-            hookDefaultLocale();
             hookYellowPageUtils(lpparam.classLoader);
-            log("installed");
+            log("installed (Yellow Page only; ROM region preserved)");
         } catch (Throwable e) {
             log("install failed: " + e.getClass().getSimpleName()
                     + ": " + e.getMessage());
         }
     }
 
-    private static void hookMiuiBuild(ClassLoader cl) {
-        try {
-            Class<?> build = Class.forName("miui.os.Build", false, cl);
-
-            setStaticBoolean(build, "IS_INTERNATIONAL_BUILD", false);
-            setStaticBoolean(build, "IS_GLOBAL_BUILD", false);
-            setStaticBoolean(build, "IS_CM_CUSTOMIZATION", false);
-            setStaticBoolean(build, "IS_CU_CUSTOMIZATION_TEST", false);
-
-            try {
-                XposedHelpers.findAndHookMethod(build, "getRegion",
-                        new XC_MethodHook() {
-                            @Override
-                            protected void afterHookedMethod(MethodHookParam param) {
-                                if (!param.hasThrowable()) param.setResult("CN");
-                            }
-                        });
-            } catch (Throwable e) {
-                log("getRegion hook failed: " + e.getClass().getSimpleName());
-            }
-
-            try {
-                XposedHelpers.findAndHookMethod(build, "checkRegion",
-                        String.class, new XC_MethodHook() {
-                            @Override
-                            protected void afterHookedMethod(MethodHookParam param) {
-                                if (param.hasThrowable()) return;
-                                Object arg = param.args != null && param.args.length > 0
-                                        ? param.args[0] : null;
-                                param.setResult(arg instanceof String
-                                        && "CN".equalsIgnoreCase((String) arg));
-                            }
-                        });
-            } catch (Throwable e) {
-                log("checkRegion hook failed: " + e.getClass().getSimpleName());
-            }
-
-        } catch (Throwable e) {
-            log("miui.os.Build hook failed: " + e.getClass().getSimpleName());
-        }
-    }
-
-    private static void setStaticBoolean(Class<?> cls, String field, boolean value) {
-        try {
-            XposedHelpers.setStaticBooleanField(cls, field, value);
-        } catch (Throwable e) {
-            log(field + " -> " + value + " failed: "
-                    + e.getClass().getSimpleName());
-        }
-    }
-
-    private static void hookDefaultLocale() {
-        try {
-            XposedHelpers.findAndHookMethod(java.util.Locale.class, "getDefault",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) {
-                            if (!param.hasThrowable()) {
-                                param.setResult(java.util.Locale.SIMPLIFIED_CHINESE);
-                            }
-                        }
-                    });
-        } catch (Throwable e) {
-            log("Locale hook failed: " + e.getClass().getSimpleName());
-        }
-    }
-
     private static void hookYellowPageUtils(ClassLoader cl) {
         try {
-            Class<?> utils = XposedHelpers.findClass("miui.yellowpage.YellowPageUtils", cl);
+            Class<?> utils = XposedHelpers.findClass(YELLOW_PAGE_UTILS, cl);
             hookBooleanMethod(utils, "isYellowPageAvailable", true);
             hookBooleanMethod(utils, "isYellowPageEnable", true);
         } catch (Throwable e) {
@@ -117,77 +54,6 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
             });
         } catch (Throwable e) {
             log(method + " hook failed: " + e.getClass().getSimpleName());
-        }
-    }
-
-    private static void hookSystemProperties() {
-        final Class<?> sp;
-        try {
-            // SystemProperties is a framework/boot class. Resolve it from the boot class loader.
-            sp = XposedHelpers.findClass("android.os.SystemProperties", null);
-        } catch (Throwable e) {
-            log("SystemProperties class failed: " + e.getClass().getSimpleName());
-            return;
-        }
-
-        hookGet(sp, String.class);
-        hookGet(sp, String.class, String.class);
-        hookGetBoolean(sp);
-    }
-
-    private static void hookGet(Class<?> sp, Class<?>... parameterTypes) {
-        try {
-            XposedBridge.hookAllMethods(sp, "get", new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (param.hasThrowable() || param.args == null
-                            || param.args.length == 0
-                            || !(param.args[0] instanceof String)) return;
-
-                    String value = cnProperty((String) param.args[0]);
-                    if (value != null) param.setResult(value);
-                }
-            });
-        } catch (Throwable e) {
-            log("SystemProperties.get hook failed: " + e.getClass().getSimpleName());
-        }
-    }
-
-    private static void hookGetBoolean(Class<?> sp) {
-        try {
-            XposedBridge.hookAllMethods(sp, "getBoolean", new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (param.hasThrowable() || param.args == null
-                            || param.args.length == 0) return;
-
-                    String key = String.valueOf(param.args[0]);
-                    if ("ro.miui.is_international_build".equals(key)
-                            || "ro.miui.is_global_build".equals(key)) {
-                        param.setResult(false);
-                    }
-                }
-            });
-        } catch (Throwable e) {
-            log("SystemProperties.getBoolean hook failed: " + e.getClass().getSimpleName());
-        }
-    }
-
-    private static String cnProperty(String key) {
-        switch (key) {
-            case "ro.miui.region":
-            case "ro.miui.build.region":
-            case "ro.miui.customized.region":
-            case "ro.product.locale.region":
-            case "ro.product.country.region":
-                return "CN";
-            case "ro.product.locale":
-                return "zh-CN";
-            case "ro.miui.is_international_build":
-            case "ro.miui.is_global_build":
-                return "0";
-            default:
-                return null;
         }
     }
 
