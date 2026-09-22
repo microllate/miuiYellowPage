@@ -32,6 +32,7 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
 
         try {
             hookMiuiBuild(lpparam.classLoader);
+            hookAndroidBuild();
             hookSystemProperties();
             log("installed");
         } catch (Throwable e) {
@@ -86,6 +87,35 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
     private static void setStaticBoolean(Class<?> cls, String fieldName, boolean value) {
         try {
             XposedHelpers.setStaticBooleanField(cls, fieldName, value);
+            log(fieldName + " -> " + value);
+        } catch (Throwable e) {
+            log(fieldName + " set failed: " + e.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Present the CN mondrian/K60 device identity to Contacts without changing
+     * the actual system-wide Build values. We deliberately keep Android/HyperOS
+     * version fields untouched.
+     */
+    private static void hookAndroidBuild() {
+        try {
+            Class<?> build = Class.forName("android.os.Build", false,
+                    ClassLoader.getSystemClassLoader());
+            setStaticString(build, "MODEL", "23013RK75C");
+            setStaticString(build, "MANUFACTURER", "Xiaomi");
+            setStaticString(build, "BRAND", "Redmi");
+            setStaticString(build, "DEVICE", "mondrian");
+            setStaticString(build, "PRODUCT", "mondrian");
+            log("android.os.Build identity -> Redmi K60 / 23013RK75C / mondrian");
+        } catch (Throwable e) {
+            log("android.os.Build hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
+    private static void setStaticString(Class<?> cls, String fieldName, String value) {
+        try {
+            XposedHelpers.setStaticObjectField(cls, fieldName, value);
             log(fieldName + " -> " + value);
         } catch (Throwable e) {
             log(fieldName + " set failed: " + e.getClass().getSimpleName());
@@ -176,16 +206,33 @@ public final class ContactsChinaEnvironmentHook implements IXposedHookLoadPackag
             case "ro.product.locale":
                 return "zh-CN";
 
+            case "ro.product.model":
+            case "ro.product.odm.model":
+            case "ro.product.odm.cert":
+                return "23013RK75C";
+
+            case "ro.product.marketname":
+                return "Redmi K60";
+
+            case "ro.product.name":
+                return "mondrian";
+
+            case "ro.product.mod_device":
+                return "mondrian";
+
+            case "ro.product.brand":
+                return "Redmi";
+
+            case "ro.build.fingerprint":
+            case "ro.odm.build.fingerprint":
+                return "Redmi/mondrian/mondrian:12/SKQ1.230401.001/OS3.0.4.0.VMNCNXM:user/release-keys";
+
+            case "ro.build.description":
+                return "missi-user 15 AQ3A.250226.002 OS3.0.4.0.VMNCNXM release-keys";
+
             case "ro.miui.is_international_build":
             case "ro.miui.is_global_build":
                 return "0";
-
-            case "ro.product.mod_device":
-                if (original != null) {
-                    return original.replaceFirst("(?i)_global$", "")
-                            .replaceFirst("(?i)_eea$", "");
-                }
-                return null;
 
             default:
                 return null;
