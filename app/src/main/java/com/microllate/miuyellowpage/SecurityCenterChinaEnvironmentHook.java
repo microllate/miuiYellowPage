@@ -83,8 +83,8 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
     private static void hookSystemProperties() {
         final Class<?> sp;
         try {
-            sp = Class.forName("android.os.SystemProperties", false,
-                    ClassLoader.getSystemClassLoader());
+            // SystemProperties is a framework/boot class. Resolve it from the boot class loader.
+            sp = XposedHelpers.findClass("android.os.SystemProperties", null);
         } catch (Throwable e) {
             log("SystemProperties class failed: " + e.getClass().getSimpleName());
             return;
