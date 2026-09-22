@@ -151,7 +151,7 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
             setStaticString(build, "BRAND", "Redmi");
             setStaticString(build, "DEVICE", "mondrian");
             setStaticString(build, "PRODUCT", "mondrian");
-            log("android.os.Build identity -> Redmi K60 / 23013RK75C / mondrian");
+            log("CN device identity -> Redmi K60 / 23013RK75C / mondrian");
         } catch (Throwable e) {
             log("android.os.Build hook failed: " + e.getClass().getSimpleName());
         }
@@ -160,7 +160,6 @@ public final class OfficialSqliteImportHook implements IXposedHookLoadPackage {
     private void setStaticString(Class<?> cls, String fieldName, String value) {
         try {
             XposedHelpers.setStaticObjectField(cls, fieldName, value);
-            log(fieldName + " -> " + value);
         } catch (Throwable e) {
             log(fieldName + " set failed: " + e.getClass().getSimpleName());
         }
