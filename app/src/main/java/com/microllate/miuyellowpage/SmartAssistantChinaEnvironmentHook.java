@@ -5,9 +5,11 @@ import android.os.Build;
 import java.lang.reflect.Method;
 import java.util.Locale;
 
+import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
  * Experimental CN environment hook for Xiaomi Global Smart Assistant.
@@ -16,13 +18,19 @@ import de.robv.android.xposed.XposedHelpers;
  * This first stage only changes local environment probes; it does not
  * replace network endpoints or modify arbitrary applications.
  */
-public final class SmartAssistantChinaEnvironmentHook {
+public final class SmartAssistantChinaEnvironmentHook implements IXposedHookLoadPackage {
     private static final String PKG = "com.mi.globalminusscreen";
     private static final String TAG = "SMART ASSISTANT CN";
 
-    private SmartAssistantChinaEnvironmentHook() {}
+    @Override
+    public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
+        if (!PKG.equals(lpparam.packageName)) {
+            return;
+        }
+        install(lpparam.classLoader);
+    }
 
-    public static void install(ClassLoader cl) {
+    private static void install(ClassLoader cl) {
         try {
             hookBuild();
             hookSystemProperties(cl);
