@@ -73,7 +73,7 @@ public final class SmartAssistantChinaEnvironmentHook implements IXposedHookLoad
                         String value = mappedProperty(key);
                         if (value != null) {
                             p.setResult(value);
-                            log("SystemProperties.get(" + key + ") -> " + value);
+                            // Per-call logging intentionally disabled to avoid log spam.
                         }
                     }
                 });
@@ -90,7 +90,7 @@ public final class SmartAssistantChinaEnvironmentHook implements IXposedHookLoad
                         String value = mappedProperty(key);
                         if (value != null) {
                             p.setResult(value);
-                            log("SystemProperties.get(" + key + ",*) -> " + value);
+                            // Per-call logging intentionally disabled to avoid log spam.
                         }
                     }
                 });
