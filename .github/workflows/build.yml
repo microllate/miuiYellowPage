@@ -57,6 +57,7 @@ jobs:
             'com.microllate.miuyellowpage.ContactsChinaEnvironmentHook'
             'com.microllate.miuyellowpage.SecurityCenterChinaEnvironmentHook'
             'com.microllate.miuyellowpage.YellowPagePrivacyCenterCompatHook'
+            'com.microllate.miuyellowpage.RecentTasksClearButtonHook'
           )
 
           for EXPECTED in "${EXPECTED_ENTRIES[@]}"; do
@@ -90,6 +91,7 @@ jobs:
           FOUND_SECURITYCENTER=0
           FOUND_PRIVACY=0
           FOUND_GAME_TURBO=0
+          FOUND_CLEAR_BUTTON=0
           FOUND_LEGACY=0
 
           while IFS= read -r DEX; do
@@ -100,6 +102,7 @@ jobs:
             printf '%s\n' "$STRINGS" | grep -Fq 'SecurityCenterChinaEnvironmentHook' && FOUND_SECURITYCENTER=1 || true
             printf '%s\n' "$STRINGS" | grep -Fq 'YellowPagePrivacyCenterCompatHook' && FOUND_PRIVACY=1 || true
             printf '%s\n' "$STRINGS" | grep -Fq 'GameTurboNormalModelCompatHook' && FOUND_GAME_TURBO=1 || true
+            printf '%s\n' "$STRINGS" | grep -Fq 'RecentTasksClearButtonHook' && FOUND_CLEAR_BUTTON=1 || true
             printf '%s\n' "$STRINGS" | grep -Fq 'YellowPageHook' && FOUND_LEGACY=1 || true
           done < <(unzip -Z1 "$APK" 'classes*.dex')
 
@@ -110,6 +113,7 @@ jobs:
             "FOUND_SECURITYCENTER=$FOUND_SECURITYCENTER" \
             "FOUND_PRIVACY=$FOUND_PRIVACY" \
             "FOUND_GAME_TURBO=$FOUND_GAME_TURBO" \
+            "FOUND_CLEAR_BUTTON=$FOUND_CLEAR_BUTTON" \
             "FOUND_LEGACY=$FOUND_LEGACY"; do
             echo "$CHECK"
           done
@@ -120,6 +124,7 @@ jobs:
           test "$FOUND_SECURITYCENTER" -eq 1
           test "$FOUND_PRIVACY" -eq 1
           test "$FOUND_GAME_TURBO" -eq 1
+          test "$FOUND_CLEAR_BUTTON" -eq 1
           test "$FOUND_LEGACY" -eq 0
 
           echo
