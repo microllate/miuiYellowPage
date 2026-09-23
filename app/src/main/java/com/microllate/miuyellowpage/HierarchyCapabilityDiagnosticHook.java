@@ -8,7 +8,7 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 public final class HierarchyCapabilityDiagnosticHook implements IXposedHookLoadPackage {
     private static final String PKG = "com.miui.aod";
-    private static final String DEVICE_UTIL = "com.miui.keyguard.editor.util.DeviceUtil";
+    private static final String DEVICE_UTIL = "com.miui.keyguard.editor.utils.DeviceUtil";
     private static final String CLOCK_VIEW = "com.miui.keyguard.editor.edit.base.BaseClockView";
     private static final String TAG = "HIERARCHY CAPABILITY";
 
