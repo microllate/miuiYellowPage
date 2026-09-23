@@ -9,10 +9,9 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage;
 /**
  * Restores the depth/effect buttons in the MIUI lockscreen wallpaper editor.
  *
- * MIUIAod skips both buttons when BaseTemplateView reports that the editor
- * is being opened from the international gallery. We only override that
- * narrow editor check instead of globally spoofing the international-build
- * flag.
+ * MIUIAod skips the depth/effect path while the editor is treated as being
+ * opened from the wallpaper carousel (Gallery). Keep the change local to
+ * BaseTemplateView instead of spoofing the global international-build flag.
  */
 public final class LockscreenEditorEffectsHook implements IXposedHookLoadPackage {
     private static final String PKG = "com.miui.aod";
@@ -37,7 +36,6 @@ public final class LockscreenEditorEffectsHook implements IXposedHookLoadPackage
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
                             Object original = param.getResult();
-
                             if (Boolean.TRUE.equals(original)) {
                                 param.setResult(false);
                                 log("isInternationalGalleryOpen: true -> false");
@@ -45,7 +43,22 @@ public final class LockscreenEditorEffectsHook implements IXposedHookLoadPackage
                         }
                     });
 
+            XposedHelpers.findAndHookMethod(
+                    baseTemplateView,
+                    "setGalleryOpened",
+                    boolean.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            if (Boolean.TRUE.equals(param.args[0])) {
+                                param.args[0] = false;
+                                log("setGalleryOpened: true -> false");
+                            }
+                        }
+                    });
+
             log("hooked BaseTemplateView.isInternationalGalleryOpen()");
+            log("hooked BaseTemplateView.setGalleryOpened(boolean)");
         } catch (Throwable e) {
             log("install failed: " + e.getClass().getSimpleName()
                     + ": " + e.getMessage());
