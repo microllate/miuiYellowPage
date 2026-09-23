@@ -20,7 +20,7 @@ public final class RecentTasksClearButtonHook implements IXposedHookLoadPackage 
     private static final String RECENTS_CONTAINER =
             "com.miui.home.recents.views.RecentsContainer";
     private static final String R_ID =
-            "com.miui.home.app.R\$id";
+            "com.miui.home.app.R$id";
     private static final String TAG = "RECENTS CLEAR BUTTON";
 
     @Override
