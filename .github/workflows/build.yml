@@ -96,14 +96,14 @@ jobs:
 
           while IFS= read -r DEX; do
             STRINGS=$(unzip -p "$APK" "$DEX" | strings || true)
-            printf '%s\n' "$STRINGS" | grep -Fq 'HookEntry' && FOUND_HOOK=1 || true
-            printf '%s\n' "$STRINGS" | grep -Fq 'OfficialSqliteImportHook' && FOUND_IMPORT=1 || true
-            printf '%s\n' "$STRINGS" | grep -Fq 'ContactsChinaEnvironmentHook' && FOUND_CONTACTS=1 || true
-            printf '%s\n' "$STRINGS" | grep -Fq 'SecurityCenterChinaEnvironmentHook' && FOUND_SECURITYCENTER=1 || true
-            printf '%s\n' "$STRINGS" | grep -Fq 'YellowPagePrivacyCenterCompatHook' && FOUND_PRIVACY=1 || true
-            printf '%s\n' "$STRINGS" | grep -Fq 'GameTurboNormalModelCompatHook' && FOUND_GAME_TURBO=1 || true
-            printf '%s\n' "$STRINGS" | grep -Fq 'RecentTasksClearButtonHook' && FOUND_CLEAR_BUTTON=1 || true
-            printf '%s\n' "$STRINGS" | grep -Fq 'YellowPageHook' && FOUND_LEGACY=1 || true
+            grep -Fq 'HookEntry' <<< "$STRINGS" && FOUND_HOOK=1 || true
+            grep -Fq 'OfficialSqliteImportHook' <<< "$STRINGS" && FOUND_IMPORT=1 || true
+            grep -Fq 'ContactsChinaEnvironmentHook' <<< "$STRINGS" && FOUND_CONTACTS=1 || true
+            grep -Fq 'SecurityCenterChinaEnvironmentHook' <<< "$STRINGS" && FOUND_SECURITYCENTER=1 || true
+            grep -Fq 'YellowPagePrivacyCenterCompatHook' <<< "$STRINGS" && FOUND_PRIVACY=1 || true
+            grep -Fq 'GameTurboNormalModelCompatHook' <<< "$STRINGS" && FOUND_GAME_TURBO=1 || true
+            grep -Fq 'RecentTasksClearButtonHook' <<< "$STRINGS" && FOUND_CLEAR_BUTTON=1 || true
+            grep -Fq 'YellowPageHook' <<< "$STRINGS" && FOUND_LEGACY=1 || true
           done < <(unzip -Z1 "$APK" 'classes*.dex')
 
           for CHECK in \
