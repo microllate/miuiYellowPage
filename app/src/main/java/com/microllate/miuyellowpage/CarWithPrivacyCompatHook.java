@@ -34,6 +34,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             hookSystemProperties();
             hookMiuiBuild(cl);
             hookMiuiBuildFlags(cl);
+            hookPrivacyPolicy(cl);
             hookLocale();
             logEnvironment();
         } catch (Throwable e) {
@@ -143,6 +144,17 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             log("CARWITH CN ENV: Build flag fields changed=" + changed);
         } catch (Throwable e) {
             log("CARWITH CN ENV: Build flag hook failed: "
+                    + e.getClass().getName() + ": " + e.getMessage());
+        }
+    }
+
+    private static void hookPrivacyPolicy(ClassLoader cl) {
+        try {
+            Class<?> netUtils = Class.forName("com.miui.privacypolicy.NetUtils", false, cl);
+            XposedHelpers.setStaticBooleanField(netUtils, "f13130b", false);
+            log("CARWITH CN ENV: NetUtils.f13130b -> false");
+        } catch (Throwable e) {
+            log("CARWITH CN ENV: NetUtils.f13130b hook failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
         }
     }
