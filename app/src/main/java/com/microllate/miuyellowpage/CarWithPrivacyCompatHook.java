@@ -1,6 +1,8 @@
 package com.microllate.miuyellowpage;
 
 import android.content.Context;
+import android.content.ContextWrapper;
+import android.content.pm.PackageManager;
 import android.os.Build;
 import android.util.Log;
 
@@ -34,7 +36,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             hookSystemProperties();
             hookMiuiBuild(cl);
             hookLocale();
-            logEnvironment();
+            hookCarWithPermissionChecks();
         } catch (Throwable e) {
             log("CARWITH CN ENV: install failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -52,7 +54,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                     String value = cnProperty(key);
                     if (value != null) {
                         p.setResult(value);
-                        log("CARWITH CN ENV: SystemProperties " + key + " -> " + value);
+                        // Deliberately quiet: SystemProperties.get() is called very frequently by CarWith.
                     }
                 }
             };
@@ -143,6 +145,34 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
         } catch (Throwable e) {
             log("CARWITH CN ENV: Build flag hook failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
+        }
+    }
+
+    private static void hookCarWithPermissionChecks() {
+        try {
+            XposedHelpers.findAndHookMethod(
+                    ContextWrapper.class,
+                    "checkSelfPermission",
+                    String.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam p) {
+                            if (p.args == null || p.args.length == 0
+                                    || !(p.args[0] instanceof String)) {
+                                return;
+                            }
+
+                            String permission = (String) p.args[0];
+                            if ("android.permission.BLUETOOTH_SCAN".equals(permission)
+                                    || "android.permission.ACCESS_BACKGROUND_LOCATION".equals(permission)) {
+                                p.setResult(PackageManager.PERMISSION_GRANTED);
+                            }
+                        }
+                    });
+            log("CARWITH PERMISSION: BLUETOOTH_SCAN + ACCESS_BACKGROUND_LOCATION -> GRANTED");
+        } catch (Throwable e) {
+            log("CARWITH PERMISSION: hook failed: "
+                    + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
