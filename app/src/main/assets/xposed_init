@@ -5,3 +5,4 @@ com.microllate.miuyellowpage.SecurityCenterChinaEnvironmentHook
 com.microllate.miuyellowpage.YellowPagePrivacyCenterCompatHook
 com.microllate.miuyellowpage.RecentTasksClearButtonHook
 com.microllate.miuyellowpage.LockscreenEditorEffectsHook
+com.microllate.miuyellowpage.CarWithPrivacyCompatHook
