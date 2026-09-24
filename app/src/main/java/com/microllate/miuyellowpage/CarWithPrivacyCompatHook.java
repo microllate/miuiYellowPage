@@ -36,6 +36,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             hookMiuiBuild(cl);
             hookLocale();
             hookCarWithPermissionChecks();
+            hookYouTubeMusicSupport(cl);
             log("CARWITH COMPAT: hooks active (CN env + locale + permissions)");
         } catch (Throwable e) {
             log("CARWITH CN ENV: install failed: "
@@ -143,6 +144,32 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
         } catch (Throwable e) {
             log("CARWITH CN ENV: Build flag hook failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
+        }
+    }
+
+    private static void hookYouTubeMusicSupport(ClassLoader cl) {
+        try {
+            Class<?> mgr = Class.forName("com.carwith.common.utils.w", false, cl);
+            XposedHelpers.findAndHookMethod(
+                    mgr,
+                    "o",
+                    String.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam p) {
+                            if (p.args == null || p.args.length == 0
+                                    || !(p.args[0] instanceof String)) {
+                                return;
+                            }
+                            if ("com.google.android.apps.youtube.music".equals(p.args[0])) {
+                                p.setResult(1);
+                            }
+                        }
+                    });
+            log("CARWITH MUSIC: YouTube Music -> supported MediaSession app");
+        } catch (Throwable e) {
+            log("CARWITH MUSIC: hook failed: "
+                    + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
