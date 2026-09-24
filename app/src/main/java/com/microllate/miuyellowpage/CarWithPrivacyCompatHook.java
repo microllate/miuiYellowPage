@@ -33,7 +33,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             log("CARWITH CN ENV: ENTRY LOADED");
             hookSystemProperties();
             hookMiuiBuild(cl);
-            hookMiuiBuildFlags(cl);
             hookLocale();
             logEnvironment();
         } catch (Throwable e) {
