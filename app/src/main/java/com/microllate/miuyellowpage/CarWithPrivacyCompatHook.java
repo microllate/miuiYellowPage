@@ -32,11 +32,11 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
 
     public static void install(ClassLoader cl) {
         try {
-            log("CARWITH CN ENV: ENTRY LOADED");
             hookSystemProperties();
             hookMiuiBuild(cl);
             hookLocale();
             hookCarWithPermissionChecks();
+            log("CARWITH COMPAT: hooks active (CN env + locale + permissions)");
         } catch (Throwable e) {
             log("CARWITH CN ENV: install failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -62,7 +62,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             XposedBridge.hookMethod(sp.getDeclaredMethod("get", String.class), hook);
             XposedBridge.hookMethod(sp.getDeclaredMethod("get", String.class, String.class), hook);
 
-            log("CARWITH CN ENV: SystemProperties hooks installed");
         } catch (Throwable e) {
             log("CARWITH CN ENV: SystemProperties hook failed: " + e);
         }
@@ -97,7 +96,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                     p.setResult("CN");
                 }
             });
-            log("CARWITH CN ENV: miui.os.Build.getRegion -> CN");
         } catch (Throwable e) {
             log("CARWITH CN ENV: miui.os.Build.getRegion hook failed: " + e);
         }
@@ -169,7 +167,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                             }
                         }
                     });
-            log("CARWITH PERMISSION: BLUETOOTH_SCAN + ACCESS_BACKGROUND_LOCATION -> GRANTED");
         } catch (Throwable e) {
             log("CARWITH PERMISSION: hook failed: "
                     + e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -187,7 +184,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                             p.setResult(Locale.SIMPLIFIED_CHINESE);
                         }
                     });
-            log("CARWITH CN ENV: Locale.getDefault -> zh-CN");
         } catch (Throwable e) {
             log("CARWITH CN ENV: Locale hook failed: " + e);
         }
