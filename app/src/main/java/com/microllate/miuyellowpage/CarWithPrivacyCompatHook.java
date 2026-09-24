@@ -4,9 +4,7 @@ import android.content.Context;
 import android.os.Build;
 import android.util.Log;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
-import java.util.Locale;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -18,7 +16,8 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.carlink";
     private static final String TAG = "miu-iYellowPage";
 
-    private CarWithPrivacyCompatHook() {
+    // Must be public for LSPosed/Xposed to instantiate the entry class.
+    public CarWithPrivacyCompatHook() {
     }
 
     @Override
@@ -29,10 +28,13 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
 
     public static void install(ClassLoader cl) {
         try {
+            log("CARWITH PRIVACY TEST: ENTRY LOADED");
             logEnvironment();
+
             int found = 0;
             found += hookAmapGate(cl);
             found += hookLocGate(cl);
+
             log("CARWITH PRIVACY TEST: installed=" + found);
         } catch (Throwable e) {
             log("CARWITH PRIVACY TEST: install failed: "
@@ -46,12 +48,15 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             Class<?> sdkInfo = Class.forName("r.o", false, cl);
             Method method = gate.getDeclaredMethod("a", Context.class, sdkInfo);
             method.setAccessible(true);
+
             XposedBridge.hookMethod(method, new XC_MethodHook() {
-                @Override protected void afterHookedMethod(MethodHookParam param) {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
                     log("CARWITH PRIVACY TEST: AMap ca.a invoked, result="
                             + describePrivacyError(param.getResult()));
                 }
             });
+
             log("CARWITH PRIVACY TEST: hooked com.amap.api.col.s.ca.a(Context,r.o)");
             return 1;
         } catch (Throwable e) {
@@ -67,12 +72,15 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             Class<?> sdkInfo = Class.forName("a9.a5", false, cl);
             Method method = gate.getDeclaredMethod("a", Context.class, sdkInfo);
             method.setAccessible(true);
+
             XposedBridge.hookMethod(method, new XC_MethodHook() {
-                @Override protected void afterHookedMethod(MethodHookParam param) {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
                     log("CARWITH PRIVACY TEST: LOC u.a invoked, result="
                             + describePrivacyError(param.getResult()));
                 }
             });
+
             log("CARWITH PRIVACY TEST: hooked com.loc.u.a(Context,a9.a5)");
             return 1;
         } catch (Throwable e) {
@@ -84,16 +92,19 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
 
     private static String describePrivacyError(Object result) {
         if (result == null) return "null";
+
         try {
             Object code = XposedHelpers.getObjectField(result, "f3485a");
             if (code != null) return String.valueOf(code);
         } catch (Throwable ignored) {
         }
+
         try {
             Object code = XposedHelpers.getObjectField(result, "f12264a");
             if (code != null) return String.valueOf(code);
         } catch (Throwable ignored) {
         }
+
         return result.getClass().getName();
     }
 
@@ -121,6 +132,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + ": " + message);
         } catch (Throwable ignored) {
         }
+
         try {
             Log.i(TAG, message);
         } catch (Throwable ignored) {
