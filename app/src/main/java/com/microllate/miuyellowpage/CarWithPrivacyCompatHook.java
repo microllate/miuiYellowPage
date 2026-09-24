@@ -6,9 +6,7 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.util.Log;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.util.Locale;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -21,8 +19,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.carlink";
     private static final String TAG = "miu-iYellowPage";
 
-    public CarWithPrivacyCompatHook() {
-    }
+    public CarWithPrivacyCompatHook() {}
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
@@ -36,11 +33,9 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             hookMiuiBuild(cl);
             hookLocale();
             hookCarWithPermissionChecks();
-            hookYouTubeMusicSupport(cl);
             log("CARWITH COMPAT: hooks active (CN env + locale + permissions)");
         } catch (Throwable e) {
-            log("CARWITH CN ENV: install failed: "
-                    + e.getClass().getName() + ": " + e.getMessage());
+            log("CARWITH CN ENV: install failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
@@ -51,17 +46,12 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                 @Override
                 protected void afterHookedMethod(MethodHookParam p) {
                     if (p.args == null || p.args.length == 0 || !(p.args[0] instanceof String)) return;
-                    String key = (String) p.args[0];
-                    String value = cnProperty(key);
-                    if (value != null) {
-                        p.setResult(value);
-                    }
+                    String value = cnProperty((String) p.args[0]);
+                    if (value != null) p.setResult(value);
                 }
             };
-
             XposedBridge.hookMethod(sp.getDeclaredMethod("get", String.class), hook);
             XposedBridge.hookMethod(sp.getDeclaredMethod("get", String.class, String.class), hook);
-
         } catch (Throwable e) {
             log("CARWITH CN ENV: SystemProperties hook failed: " + e);
         }
@@ -103,18 +93,11 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
 
     private static void hookCarWithPermissionChecks() {
         try {
-            XposedHelpers.findAndHookMethod(
-                    ContextWrapper.class,
-                    "checkSelfPermission",
-                    String.class,
+            XposedHelpers.findAndHookMethod(ContextWrapper.class, "checkSelfPermission", String.class,
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam p) {
-                            if (p.args == null || p.args.length == 0
-                                    || !(p.args[0] instanceof String)) {
-                                return;
-                            }
-
+                            if (p.args == null || p.args.length == 0 || !(p.args[0] instanceof String)) return;
                             String permission = (String) p.args[0];
                             if ("android.permission.BLUETOOTH_SCAN".equals(permission)
                                     || "android.permission.ACCESS_BACKGROUND_LOCATION".equals(permission)) {
@@ -123,81 +106,25 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                         }
                     });
         } catch (Throwable e) {
-            log("CARWITH PERMISSION: hook failed: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage());
+            log("CARWITH PERMISSION: hook failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
     private static void hookLocale() {
         try {
-            XposedHelpers.findAndHookMethod(
-                    Locale.class,
-                    "getDefault",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam p) {
-                            p.setResult(Locale.SIMPLIFIED_CHINESE);
-                        }
-                    });
+            XposedHelpers.findAndHookMethod(Locale.class, "getDefault", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    p.setResult(Locale.SIMPLIFIED_CHINESE);
+                }
+            });
         } catch (Throwable e) {
             log("CARWITH CN ENV: Locale hook failed: " + e);
         }
     }
 
-    private static void hookYouTubeMusicSupport(ClassLoader cl) {
-        try {
-            Class<?> mgr = Class.forName("com.carwith.common.utils.w", false, cl);
-            XposedHelpers.findAndHookMethod(
-                    mgr,
-                    "o",
-                    String.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam p) {
-                            if (p.args == null || p.args.length == 0
-                                    || !(p.args[0] instanceof String)) {
-                                return;
-                            }
-                            if ("com.google.android.apps.youtube.music".equals(p.args[0])) {
-                                p.setResult(1);
-                            }
-                        }
-                    });
-            log("CARWITH MUSIC: YouTube Music -> supported MediaSession app");
-        } catch (Throwable e) {
-            log("CARWITH MUSIC: hook failed: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage());
-        }
-    }
-
-    private static void logEnvironment() {
-        log("CARWITH CN ENV: model=" + Build.MODEL
-                + ", device=" + Build.DEVICE
-                + ", mod_device=" + getSystemProperty("ro.product.mod_device")
-                + ", miui_region=" + getSystemProperty("ro.miui.region")
-                + ", miui_build_region=" + getSystemProperty("ro.miui.build.region")
-                + ", locale=" + Locale.getDefault());
-    }
-
-    private static String getSystemProperty(String key) {
-        try {
-            Class<?> cls = Class.forName("android.os.SystemProperties");
-            Method get = cls.getDeclaredMethod("get", String.class, String.class);
-            get.setAccessible(true);
-            return String.valueOf(get.invoke(null, key, ""));
-        } catch (Throwable e) {
-            return "?";
-        }
-    }
-
     private static void log(String message) {
-        try {
-            XposedBridge.log(TAG + ": " + message);
-        } catch (Throwable ignored) {
-        }
-        try {
-            Log.i(TAG, message);
-        } catch (Throwable ignored) {
-        }
+        try { XposedBridge.log(TAG + ": " + message); } catch (Throwable ignored) {}
+        try { Log.i(TAG, message); } catch (Throwable ignored) {}
     }
 }
