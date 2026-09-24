@@ -4,7 +4,9 @@ import android.content.Context;
 import android.os.Build;
 import android.util.Log;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Locale;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -31,6 +33,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             log("CARWITH CN ENV: ENTRY LOADED");
             hookSystemProperties();
             hookMiuiBuild(cl);
+            hookMiuiBuildFlags(cl);
             hookLocale();
             logEnvironment();
         } catch (Throwable e) {
@@ -42,10 +45,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
     private static void hookSystemProperties() {
         try {
             Class<?> sp = Class.forName("android.os.SystemProperties");
-            Method get1 = sp.getDeclaredMethod("get", String.class);
-            Method get2 = sp.getDeclaredMethod("get", String.class, String.class);
-            Method getInt = sp.getDeclaredMethod("getInt", String.class, int.class);
-
             XC_MethodHook hook = new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam p) {
@@ -59,20 +58,8 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                 }
             };
 
-            XposedBridge.hookMethod(get1, hook);
-            XposedBridge.hookMethod(get2, hook);
-
-            XposedBridge.hookMethod(getInt, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam p) {
-                    if (p.args == null || p.args.length < 1 || !(p.args[0] instanceof String)) return;
-                    String key = (String) p.args[0];
-                    if ("ro.miui.region".equals(key) || "ro.miui.build.region".equals(key)) {
-                        p.setResult(1);
-                        log("CARWITH CN ENV: SystemProperties.getInt " + key + " -> 1");
-                    }
-                }
-            });
+            XposedBridge.hookMethod(sp.getDeclaredMethod("get", String.class), hook);
+            XposedBridge.hookMethod(sp.getDeclaredMethod("get", String.class, String.class), hook);
 
             log("CARWITH CN ENV: SystemProperties hooks installed");
         } catch (Throwable e) {
@@ -82,52 +69,81 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
 
     private static String cnProperty(String key) {
         switch (key) {
-            case "ro.product.mod_device":
-                return "mondrian";
-            case "ro.miui.region":
-                return "CN";
-            case "ro.miui.build.region":
-                return "CN";
-            case "ro.product.locale":
-                return "zh-CN";
-            case "ro.product.locale.language":
-                return "zh";
-            case "ro.product.locale.region":
-                return "CN";
-            case "persist.sys.locale":
-                return "zh-CN";
-            case "persist.sys.language":
-                return "zh";
-            case "persist.sys.country":
-                return "CN";
-            case "ro.miui.cust_variant":
-                return "cn";
-            case "ro.miui.customized.region":
-                return "CN";
-            case "ro.miui.region.region":
-                return "CN";
-            default:
-                return null;
+            case "ro.product.mod_device": return "mondrian";
+            case "ro.miui.region": return "CN";
+            case "ro.miui.build.region": return "CN";
+            case "ro.product.locale": return "zh-CN";
+            case "ro.product.locale.language": return "zh";
+            case "ro.product.locale.region": return "CN";
+            case "persist.sys.locale": return "zh-CN";
+            case "persist.sys.language": return "zh";
+            case "persist.sys.country": return "CN";
+            case "ro.miui.cust_variant": return "cn";
+            case "ro.miui.customized.region": return "CN";
+            case "ro.miui.region.region": return "CN";
+            default: return null;
         }
     }
 
     private static void hookMiuiBuild(ClassLoader cl) {
         try {
             Class<?> build = Class.forName("miui.os.Build", false, cl);
-
             Method getRegion = build.getDeclaredMethod("getRegion");
             getRegion.setAccessible(true);
             XposedBridge.hookMethod(getRegion, new XC_MethodHook() {
                 @Override
                 protected void afterHookedMethod(MethodHookParam p) {
                     p.setResult("CN");
-                    log("CARWITH CN ENV: miui.os.Build.getRegion() -> CN");
                 }
             });
-
-            log("CARWITH CN ENV: miui.os.Build.getRegion hooked");
+            log("CARWITH CN ENV: miui.os.Build.getRegion -> CN");
         } catch (Throwable e) {
-            log("CARWITH CN ENV: miui.os.Build hook failed: " + e);
+            log("CARWITH CN ENV: miui.os.Build.getRegion hook failed: " + e);
+        }
+    }
+
+    private static void hookMiuiBuildFlags(ClassLoader cl) {
+        try {
+            Class<?> build = Class.forName("miui.os.Build", false, cl);
+            int changed = 0;
+
+            for (Field f : build.getDeclaredFields()) {
+                int mods = f.getModifiers();
+                if (!Modifier.isStatic(mods)) continue;
+
+                String n = f.getName().toUpperCase(Locale.ROOT);
+                if (!(n.contains("INTERNATIONAL")
+                        || n.contains("GLOBAL")
+                        || n.contains("OVERSEAS")
+                        || n.contains("REGION"))) {
+                    continue;
+                }
+
+                f.setAccessible(true);
+                Object old = null;
+                try {
+                    old = f.get(null);
+                } catch (Throwable ignored) {
+                }
+
+                if (f.getType() == boolean.class || f.getType() == Boolean.class) {
+                    XposedHelpers.setStaticBooleanField(build, f.getName(), false);
+                    log("CARWITH CN ENV: miui.os.Build." + f.getName()
+                            + " " + old + " -> false");
+                    changed++;
+                } else if (f.getType() == String.class) {
+                    String value = "CN";
+                    XposedHelpers.setStaticObjectField(build, f.getName(), value);
+                    log("CARWITH CN ENV: miui.os.Build." + f.getName()
+                            + " " + old + " -> " + value);
+                    changed++;
+                }
+            }
+
+            log("CARWITH CN ENV: Build flag fields changed=" + changed);
+        } catch (Throwable e) {
+            log("CARWITH CN ENV: Build flag hook failed: "
+                    + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
