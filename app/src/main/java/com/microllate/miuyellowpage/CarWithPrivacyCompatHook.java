@@ -5,6 +5,7 @@ import android.os.Build;
 import android.util.Log;
 
 import java.lang.reflect.Method;
+import java.util.Locale;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
@@ -16,7 +17,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
     private static final String PACKAGE = "com.miui.carlink";
     private static final String TAG = "miu-iYellowPage";
 
-    // Must be public for LSPosed/Xposed to instantiate the entry class.
     public CarWithPrivacyCompatHook() {
     }
 
@@ -28,92 +28,133 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
 
     public static void install(ClassLoader cl) {
         try {
-            log("CARWITH PRIVACY TEST: ENTRY LOADED");
+            log("CARWITH CN ENV: ENTRY LOADED");
+            hookSystemProperties();
+            hookMiuiBuild(cl);
+            hookLocale();
             logEnvironment();
-
-            int found = 0;
-            found += hookAmapGate(cl);
-            found += hookLocGate(cl);
-
-            log("CARWITH PRIVACY TEST: installed=" + found);
         } catch (Throwable e) {
-            log("CARWITH PRIVACY TEST: install failed: "
+            log("CARWITH CN ENV: install failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
-    private static int hookAmapGate(ClassLoader cl) {
+    private static void hookSystemProperties() {
         try {
-            Class<?> gate = Class.forName("com.amap.api.col.s.ca", false, cl);
-            Class<?> sdkInfo = Class.forName("r.o", false, cl);
-            Method method = gate.getDeclaredMethod("a", Context.class, sdkInfo);
-            method.setAccessible(true);
+            Class<?> sp = Class.forName("android.os.SystemProperties");
+            Method get1 = sp.getDeclaredMethod("get", String.class);
+            Method get2 = sp.getDeclaredMethod("get", String.class, String.class);
+            Method getInt = sp.getDeclaredMethod("getInt", String.class, int.class);
 
-            XposedBridge.hookMethod(method, new XC_MethodHook() {
+            XC_MethodHook hook = new XC_MethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    log("CARWITH PRIVACY TEST: AMap ca.a invoked, result="
-                            + describePrivacyError(param.getResult()));
+                protected void afterHookedMethod(MethodHookParam p) {
+                    if (p.args == null || p.args.length == 0 || !(p.args[0] instanceof String)) return;
+                    String key = (String) p.args[0];
+                    String value = cnProperty(key);
+                    if (value != null) {
+                        p.setResult(value);
+                        log("CARWITH CN ENV: SystemProperties " + key + " -> " + value);
+                    }
+                }
+            };
+
+            XposedBridge.hookMethod(get1, hook);
+            XposedBridge.hookMethod(get2, hook);
+
+            XposedBridge.hookMethod(getInt, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    if (p.args == null || p.args.length < 1 || !(p.args[0] instanceof String)) return;
+                    String key = (String) p.args[0];
+                    if ("ro.miui.region".equals(key) || "ro.miui.build.region".equals(key)) {
+                        p.setResult(1);
+                        log("CARWITH CN ENV: SystemProperties.getInt " + key + " -> 1");
+                    }
                 }
             });
 
-            log("CARWITH PRIVACY TEST: hooked com.amap.api.col.s.ca.a(Context,r.o)");
-            return 1;
+            log("CARWITH CN ENV: SystemProperties hooks installed");
         } catch (Throwable e) {
-            log("CARWITH PRIVACY TEST: AMap hook failed: "
-                    + e.getClass().getName() + ": " + e.getMessage());
-            return 0;
+            log("CARWITH CN ENV: SystemProperties hook failed: " + e);
         }
     }
 
-    private static int hookLocGate(ClassLoader cl) {
-        try {
-            Class<?> gate = Class.forName("com.loc.u", false, cl);
-            Class<?> sdkInfo = Class.forName("a9.a5", false, cl);
-            Method method = gate.getDeclaredMethod("a", Context.class, sdkInfo);
-            method.setAccessible(true);
+    private static String cnProperty(String key) {
+        switch (key) {
+            case "ro.product.mod_device":
+                return "mondrian";
+            case "ro.miui.region":
+                return "CN";
+            case "ro.miui.build.region":
+                return "CN";
+            case "ro.product.locale":
+                return "zh-CN";
+            case "ro.product.locale.language":
+                return "zh";
+            case "ro.product.locale.region":
+                return "CN";
+            case "persist.sys.locale":
+                return "zh-CN";
+            case "persist.sys.language":
+                return "zh";
+            case "persist.sys.country":
+                return "CN";
+            case "ro.miui.cust_variant":
+                return "cn";
+            case "ro.miui.customized.region":
+                return "CN";
+            case "ro.miui.region.region":
+                return "CN";
+            default:
+                return null;
+        }
+    }
 
-            XposedBridge.hookMethod(method, new XC_MethodHook() {
+    private static void hookMiuiBuild(ClassLoader cl) {
+        try {
+            Class<?> build = Class.forName("miui.os.Build", false, cl);
+
+            Method getRegion = build.getDeclaredMethod("getRegion");
+            getRegion.setAccessible(true);
+            XposedBridge.hookMethod(getRegion, new XC_MethodHook() {
                 @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    log("CARWITH PRIVACY TEST: LOC u.a invoked, result="
-                            + describePrivacyError(param.getResult()));
+                protected void afterHookedMethod(MethodHookParam p) {
+                    p.setResult("CN");
+                    log("CARWITH CN ENV: miui.os.Build.getRegion() -> CN");
                 }
             });
 
-            log("CARWITH PRIVACY TEST: hooked com.loc.u.a(Context,a9.a5)");
-            return 1;
+            log("CARWITH CN ENV: miui.os.Build.getRegion hooked");
         } catch (Throwable e) {
-            log("CARWITH PRIVACY TEST: LOC hook failed: "
-                    + e.getClass().getName() + ": " + e.getMessage());
-            return 0;
+            log("CARWITH CN ENV: miui.os.Build hook failed: " + e);
         }
     }
 
-    private static String describePrivacyError(Object result) {
-        if (result == null) return "null";
-
+    private static void hookLocale() {
         try {
-            Object code = XposedHelpers.getObjectField(result, "f3485a");
-            if (code != null) return String.valueOf(code);
-        } catch (Throwable ignored) {
+            XposedHelpers.findAndHookMethod(
+                    Locale.class,
+                    "getDefault",
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam p) {
+                            p.setResult(Locale.SIMPLIFIED_CHINESE);
+                        }
+                    });
+            log("CARWITH CN ENV: Locale.getDefault -> zh-CN");
+        } catch (Throwable e) {
+            log("CARWITH CN ENV: Locale hook failed: " + e);
         }
-
-        try {
-            Object code = XposedHelpers.getObjectField(result, "f12264a");
-            if (code != null) return String.valueOf(code);
-        } catch (Throwable ignored) {
-        }
-
-        return result.getClass().getName();
     }
 
     private static void logEnvironment() {
-        log("CARWITH PRIVACY TEST: model=" + Build.MODEL
+        log("CARWITH CN ENV: model=" + Build.MODEL
                 + ", device=" + Build.DEVICE
                 + ", mod_device=" + getSystemProperty("ro.product.mod_device")
                 + ", miui_region=" + getSystemProperty("ro.miui.region")
-                + ", miui_build_region=" + getSystemProperty("ro.miui.build.region"));
+                + ", miui_build_region=" + getSystemProperty("ro.miui.build.region")
+                + ", locale=" + Locale.getDefault());
     }
 
     private static String getSystemProperty(String key) {
@@ -132,7 +173,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             XposedBridge.log(TAG + ": " + message);
         } catch (Throwable ignored) {
         }
-
         try {
             Log.i(TAG, message);
         } catch (Throwable ignored) {
