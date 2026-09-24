@@ -2,10 +2,8 @@ package com.microllate.miuyellowpage;
 
 import android.content.ContextWrapper;
 import android.content.pm.PackageManager;
-import android.os.Build;
 import android.util.Log;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,8 +37,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             hookYouTubeMusicWhitelist(cl);
             log("CARWITH COMPAT: hooks active (CN env + locale + permissions)");
         } catch (Throwable e) {
-            log("CARWITH CN ENV: install failed: "
-                    + e.getClass().getName() + ": " + e.getMessage());
+            log("CARWITH CN ENV: install failed: " + e.getClass().getName() + ": " + e.getMessage());
         }
     }
 
@@ -98,10 +95,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
 
     private static void hookCarWithPermissionChecks() {
         try {
-            XposedHelpers.findAndHookMethod(
-                    ContextWrapper.class,
-                    "checkSelfPermission",
-                    String.class,
+            XposedHelpers.findAndHookMethod(ContextWrapper.class, "checkSelfPermission", String.class,
                     new XC_MethodHook() {
                         @Override
                         protected void afterHookedMethod(MethodHookParam p) {
@@ -114,22 +108,18 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                         }
                     });
         } catch (Throwable e) {
-            log("CARWITH PERMISSION: hook failed: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage());
+            log("CARWITH PERMISSION: hook failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
     private static void hookLocale() {
         try {
-            XposedHelpers.findAndHookMethod(
-                    Locale.class,
-                    "getDefault",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam p) {
-                            p.setResult(Locale.SIMPLIFIED_CHINESE);
-                        }
-                    });
+            XposedHelpers.findAndHookMethod(Locale.class, "getDefault", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    p.setResult(Locale.SIMPLIFIED_CHINESE);
+                }
+            });
         } catch (Throwable e) {
             log("CARWITH CN ENV: Locale hook failed: " + e);
         }
@@ -140,55 +130,43 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             Class<?> mgr = Class.forName("com.carwith.common.utils.w", false, cl);
             Class<?> itemClass = Class.forName("com.carwith.common.bean.AppWhiteItem", false, cl);
 
-            XposedHelpers.findAndHookMethod(
-                    mgr,
-                    "G",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam p) {
-                            Object result = p.getResult();
-                            if (!(result instanceof List)) return;
+            XposedHelpers.findAndHookMethod(mgr, "G", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam p) {
+                    Object result = p.getResult();
+                    if (!(result instanceof List)) return;
 
-                            List<?> original = (List<?>) result;
-                            for (Object item : original) {
-                                if (item != null) {
-                                    try {
-                                        Method getPackageName = itemClass.getMethod("getPackageName");
-                                        if (YOUTUBE_MUSIC.equals(getPackageName.invoke(item))) {
-                                            return;
-                                        }
-                                    } catch (Throwable ignored) {
-                                    }
-                                }
-                            }
-
-                            try {
-                                Constructor<?> ctor = itemClass.getConstructor(
-                                        String.class,
-                                        long.class,
-                                        String.class,
-                                        int.class,
-                                        String.class,
-                                        int.class);
-
-                                Object item = ctor.newInstance(
-                                        YOUTUBE_MUSIC,
-                                        0L,
-                                        "music",
-                                        1,
-                                        "YouTube Music",
-                                        1);
-
-                                List<Object> updated = new ArrayList<>(original);
-                                updated.add(item);
-                                p.setResult(updated);
-                                log("CARWITH MUSIC: YouTube Music added to runtime whitelist");
-                            } catch (Throwable e) {
-                                log("CARWITH MUSIC: whitelist item failed: "
-                                        + e.getClass().getSimpleName() + ": " + e.getMessage());
-                            }
+                    List<?> original = (List<?>) result;
+                    for (Object item : original) {
+                        if (item == null) continue;
+                        try {
+                            Method getPackageName = itemClass.getMethod("getPackageName");
+                            if (YOUTUBE_MUSIC.equals(getPackageName.invoke(item))) return;
+                        } catch (Throwable ignored) {
                         }
-                    });
+                    }
+
+                    try {
+                        Object item = itemClass.getDeclaredConstructor().newInstance();
+                        itemClass.getMethod("setPackageName", String.class).invoke(item, YOUTUBE_MUSIC);
+                        itemClass.getMethod("setVersionCode", long.class).invoke(item, 0L);
+                        itemClass.getMethod("setApplicationType", String.class).invoke(item, "music");
+                        itemClass.getMethod("setCastType", int.class).invoke(item, 1);
+                        itemClass.getMethod("setAppName", String.class).invoke(item, "YouTube Music");
+                        itemClass.getMethod("setAppMode", int.class).invoke(item, 1);
+                        itemClass.getMethod("setAppCategory", int.class).invoke(item, 0);
+                        itemClass.getMethod("setAppId", int.class).invoke(item, 0);
+
+                        List<Object> updated = new ArrayList<>(original);
+                        updated.add(item);
+                        p.setResult(updated);
+                        log("CARWITH MUSIC: YouTube Music added to runtime whitelist");
+                    } catch (Throwable e) {
+                        log("CARWITH MUSIC: whitelist item failed: "
+                                + e.getClass().getSimpleName() + ": " + e.getMessage());
+                    }
+                }
+            });
 
             log("CARWITH MUSIC: whitelist hook installed");
         } catch (Throwable e) {
