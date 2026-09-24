@@ -38,6 +38,7 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             hookLocale();
             hookCarWithPermissionChecks();
             hookCarWithConnectionReset(cl);
+            dumpCarWithState(cl, "STARTUP");
         } catch (Throwable e) {
             log("CARWITH CN ENV: install failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -201,11 +202,38 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             // a0.p("none"): return CarWith's connection state to idle.
             Class<?> state = XposedHelpers.findClass(
                     "com.carwith.common.utils.a0", cl);
+            dumpCarWithState(cl, "BEFORE_RESET");
             XposedHelpers.callStaticMethod(state, "p", "none");
+            dumpCarWithState(cl, "AFTER_RESET");
 
             log("CARWITH RESET: stale ICCOA/connection state cleared");
         } catch (Throwable e) {
             log("CARWITH RESET: state cleanup failed: "
+                    + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+    }
+
+    private static void dumpCarWithState(ClassLoader cl, String point) {
+        try {
+            Class<?> receiver = XposedHelpers.findClass(
+                    "com.miui.carlink.castfwk.wireless.bt.BleBroadcastReceiver", cl);
+
+            Object carId = XposedHelpers.getStaticObjectField(
+                    receiver, "f12829a");
+            Object scanResult = XposedHelpers.getStaticObjectField(
+                    receiver, "f12830b");
+
+            Class<?> state = XposedHelpers.findClass(
+                    "com.carwith.common.utils.a0", cl);
+            Object connectionState = XposedHelpers.getStaticObjectField(
+                    state, "f4889a");
+
+            log("CARWITH STATE [" + point + "]: "
+                    + "f12829a=" + String.valueOf(carId)
+                    + ", f12830b=" + String.valueOf(scanResult)
+                    + ", a0=" + String.valueOf(connectionState));
+        } catch (Throwable e) {
+            log("CARWITH STATE [" + point + "] read failed: "
                     + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
