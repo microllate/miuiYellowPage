@@ -37,8 +37,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
             hookMiuiBuild(cl);
             hookLocale();
             hookCarWithPermissionChecks();
-            hookCarWithConnectionReset(cl);
-            dumpCarWithState(cl, "STARTUP");
         } catch (Throwable e) {
             log("CARWITH CN ENV: install failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
@@ -147,94 +145,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
         } catch (Throwable e) {
             log("CARWITH CN ENV: Build flag hook failed: "
                     + e.getClass().getName() + ": " + e.getMessage());
-        }
-    }
-
-    /**
-     * Clear CarWith's in-memory connection latch when PermissionActivity
-     * exits through its abnormal/failed path. This preserves the normal
-     * successful connection lifecycle and only resets the stale receiver
-     * state that otherwise blocks the next ICCOA/CarLink scan.
-     */
-    private static void hookCarWithConnectionReset(ClassLoader cl) {
-        try {
-            Class<?> activity = XposedHelpers.findClass(
-                    "com.miui.carlink.castfwk.permission.PermissionActivity", cl);
-
-            XposedHelpers.findAndHookMethod(
-                    activity,
-                    "onDestroy",
-                    new XC_MethodHook() {
-                        @Override
-                        protected void beforeHookedMethod(MethodHookParam p) {
-                            try {
-                                boolean handled = XposedHelpers.getBooleanField(
-                                        p.thisObject, "f12768e");
-                                boolean activityResult = XposedHelpers.getBooleanField(
-                                        p.thisObject, "f12772i");
-
-                                // PermissionActivity itself uses this condition
-                                // for its abnormal exit path.
-                                if (!handled && !activityResult) {
-                                    resetCarWithConnectionState(cl);
-                                }
-                            } catch (Throwable ignored) {
-                                // Keep CarWith's original lifecycle untouched if
-                                // a field/class changes in a future version.
-                            }
-                        }
-                    });
-
-            log("CARWITH RESET: PermissionActivity failure cleanup installed");
-        } catch (Throwable e) {
-            log("CARWITH RESET: PermissionActivity hook failed: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage());
-        }
-    }
-
-    private static void resetCarWithConnectionState(ClassLoader cl) {
-        try {
-            // BleBroadcastReceiver.d(): clear current ICCOA scan/device latch.
-            Class<?> receiver = XposedHelpers.findClass(
-                    "com.miui.carlink.castfwk.wireless.bt.BleBroadcastReceiver", cl);
-            XposedHelpers.callStaticMethod(receiver, "d");
-
-            // a0.p("none"): return CarWith's connection state to idle.
-            Class<?> state = XposedHelpers.findClass(
-                    "com.carwith.common.utils.a0", cl);
-            dumpCarWithState(cl, "BEFORE_RESET");
-            XposedHelpers.callStaticMethod(state, "p", "none");
-            dumpCarWithState(cl, "AFTER_RESET");
-
-            log("CARWITH RESET: stale ICCOA/connection state cleared");
-        } catch (Throwable e) {
-            log("CARWITH RESET: state cleanup failed: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage());
-        }
-    }
-
-    private static void dumpCarWithState(ClassLoader cl, String point) {
-        try {
-            Class<?> receiver = XposedHelpers.findClass(
-                    "com.miui.carlink.castfwk.wireless.bt.BleBroadcastReceiver", cl);
-
-            Object carId = XposedHelpers.getStaticObjectField(
-                    receiver, "f12829a");
-            Object scanResult = XposedHelpers.getStaticObjectField(
-                    receiver, "f12830b");
-
-            Class<?> state = XposedHelpers.findClass(
-                    "com.carwith.common.utils.a0", cl);
-            Object connectionState = XposedHelpers.getStaticObjectField(
-                    state, "f4889a");
-
-            log("CARWITH STATE [" + point + "]: "
-                    + "f12829a=" + String.valueOf(carId)
-                    + ", f12830b=" + String.valueOf(scanResult)
-                    + ", a0=" + String.valueOf(connectionState));
-        } catch (Throwable e) {
-            log("CARWITH STATE [" + point + "] read failed: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
