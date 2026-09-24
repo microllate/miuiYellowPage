@@ -55,7 +55,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                     String value = cnProperty(key);
                     if (value != null) {
                         p.setResult(value);
-                        // Deliberately quiet: SystemProperties.get() is called very frequently by CarWith.
                     }
                 }
             };
@@ -102,77 +101,6 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
         }
     }
 
-    private static void hookMiuiBuildFlags(ClassLoader cl) {
-        try {
-            Class<?> build = Class.forName("miui.os.Build", false, cl);
-            int changed = 0;
-
-            for (Field f : build.getDeclaredFields()) {
-                int mods = f.getModifiers();
-                if (!Modifier.isStatic(mods)) continue;
-
-                String n = f.getName().toUpperCase(Locale.ROOT);
-                if (!(n.contains("INTERNATIONAL")
-                        || n.contains("GLOBAL")
-                        || n.contains("OVERSEAS")
-                        || n.contains("REGION"))) {
-                    continue;
-                }
-
-                f.setAccessible(true);
-                Object old = null;
-                try {
-                    old = f.get(null);
-                } catch (Throwable ignored) {
-                }
-
-                if (f.getType() == boolean.class || f.getType() == Boolean.class) {
-                    XposedHelpers.setStaticBooleanField(build, f.getName(), false);
-                    log("CARWITH CN ENV: miui.os.Build." + f.getName()
-                            + " " + old + " -> false");
-                    changed++;
-                } else if (f.getType() == String.class) {
-                    String value = "CN";
-                    XposedHelpers.setStaticObjectField(build, f.getName(), value);
-                    log("CARWITH CN ENV: miui.os.Build." + f.getName()
-                            + " " + old + " -> " + value);
-                    changed++;
-                }
-            }
-
-            log("CARWITH CN ENV: Build flag fields changed=" + changed);
-        } catch (Throwable e) {
-            log("CARWITH CN ENV: Build flag hook failed: "
-                    + e.getClass().getName() + ": " + e.getMessage());
-        }
-    }
-
-    private static void hookYouTubeMusicSupport(ClassLoader cl) {
-        try {
-            Class<?> mgr = Class.forName("com.carwith.common.utils.w", false, cl);
-            XposedHelpers.findAndHookMethod(
-                    mgr,
-                    "o",
-                    String.class,
-                    new XC_MethodHook() {
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam p) {
-                            if (p.args == null || p.args.length == 0
-                                    || !(p.args[0] instanceof String)) {
-                                return;
-                            }
-                            if ("com.google.android.apps.youtube.music".equals(p.args[0])) {
-                                p.setResult(1);
-                            }
-                        }
-                    });
-            log("CARWITH MUSIC: YouTube Music -> supported MediaSession app");
-        } catch (Throwable e) {
-            log("CARWITH MUSIC: hook failed: "
-                    + e.getClass().getSimpleName() + ": " + e.getMessage());
-        }
-    }
-
     private static void hookCarWithPermissionChecks() {
         try {
             XposedHelpers.findAndHookMethod(
@@ -213,6 +141,32 @@ public final class CarWithPrivacyCompatHook implements IXposedHookLoadPackage {
                     });
         } catch (Throwable e) {
             log("CARWITH CN ENV: Locale hook failed: " + e);
+        }
+    }
+
+    private static void hookYouTubeMusicSupport(ClassLoader cl) {
+        try {
+            Class<?> mgr = Class.forName("com.carwith.common.utils.w", false, cl);
+            XposedHelpers.findAndHookMethod(
+                    mgr,
+                    "o",
+                    String.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam p) {
+                            if (p.args == null || p.args.length == 0
+                                    || !(p.args[0] instanceof String)) {
+                                return;
+                            }
+                            if ("com.google.android.apps.youtube.music".equals(p.args[0])) {
+                                p.setResult(1);
+                            }
+                        }
+                    });
+            log("CARWITH MUSIC: YouTube Music -> supported MediaSession app");
+        } catch (Throwable e) {
+            log("CARWITH MUSIC: hook failed: "
+                    + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
     }
 
