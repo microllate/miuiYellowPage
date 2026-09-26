@@ -41,14 +41,16 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
                     Object original = param.getResult();
                     if (!Boolean.TRUE.equals(original)) {
                         param.setResult(true);
-                        log("RegionUtil." + methodName + "(): " + original + " -> true");
+                        log(clazz.getSimpleName() + "." + methodName
+                                + "(): " + original + " -> true");
                     }
                 }
             });
 
-            log("Music online hook installed: RegionUtil." + methodName + "()");
+            log("Music hook installed: "
+                    + clazz.getName() + "." + methodName + "()");
         } catch (Throwable e) {
-            log("RegionUtil." + methodName + "() hook failed: "
+            log(clazz.getName() + "." + methodName + "() hook failed: "
                     + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
         }
     }
@@ -68,7 +70,8 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
                     Object original = param.getResult();
                     if (!Boolean.TRUE.equals(original)) {
                         param.setResult(true);
-                        log("RegionUtil.l(boolean): " + original + " -> true (Singapore/NCT endpoint)");
+                        log("RegionUtil.l(boolean): " + original
+                                + " -> true (Singapore/NCT endpoint)");
                     }
                 }
             });
@@ -76,6 +79,24 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
             log("Music Singapore endpoint hook installed: RegionUtil.l(boolean)");
         } catch (Throwable e) {
             log("RegionUtil.l(boolean) hook failed: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+    private static void hookNctOnline(ClassLoader classLoader) {
+        try {
+            Class<?> nctManager = Class.forName(
+                    "com.miui.player.nct.manager.NctManager",
+                    false,
+                    classLoader
+            );
+
+            // The NCT implementation normally depends on remote/config state.
+            // Force the online-service gate open while keeping the Singapore endpoint.
+            hookBooleanMethod(nctManager, "isNctOnlineOpen");
+
+        } catch (Throwable e) {
+            log("NctManager hook failed: "
                     + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
         }
     }
@@ -101,6 +122,9 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
 
             // l(boolean): force NCT/Singapore endpoint selection.
             hookSingaporeRegion(regionUtil);
+
+            // NCT online-service gate.
+            hookNctOnline(lpparam.classLoader);
 
         } catch (Throwable e) {
             log("Music online hook failed: "
