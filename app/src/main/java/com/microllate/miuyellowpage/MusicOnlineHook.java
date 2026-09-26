@@ -53,6 +53,33 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
         }
     }
 
+    private static void hookSingaporeRegion(Class<?> clazz) {
+        try {
+            Method target = clazz.getDeclaredMethod("l", boolean.class);
+            target.setAccessible(true);
+
+            XposedBridge.hookMethod(target, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        return;
+                    }
+
+                    Object original = param.getResult();
+                    if (!Boolean.TRUE.equals(original)) {
+                        param.setResult(true);
+                        log("RegionUtil.l(boolean): " + original + " -> true (Singapore/NCT endpoint)");
+                    }
+                }
+            });
+
+            log("Music Singapore endpoint hook installed: RegionUtil.l(boolean)");
+        } catch (Throwable e) {
+            log("RegionUtil.l(boolean) hook failed: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
         if (!PACKAGE.equals(lpparam.packageName)) {
@@ -71,6 +98,9 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
 
             // i(): ASM/EEA online-mode region gate.
             hookBooleanMethod(regionUtil, "i");
+
+            // l(boolean): force NCT/Singapore endpoint selection.
+            hookSingaporeRegion(regionUtil);
 
         } catch (Throwable e) {
             log("Music online hook failed: "
