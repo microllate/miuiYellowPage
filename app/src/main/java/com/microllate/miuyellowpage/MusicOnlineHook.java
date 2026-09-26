@@ -8,21 +8,15 @@ import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
 
 /**
- * Xiaomi Music EEA online-service compatibility hook.
+ * Standalone Xiaomi Music EEA online-service compatibility hook.
  *
- * Scope:
- * - Only touches com.xiaomi.music.
- * - Does not modify the existing YellowPage hooks.
- * - Only overrides RegionUtil.p() so the Music app does not disable
- *   its online-service layer because of the current EEA region.
+ * Target package: com.miui.player
  *
- * Important:
- * This file is intentionally standalone. xposed_init is NOT modified here,
- * per the requirement to leave existing files untouched.
+ * Existing project files are intentionally not modified.
  */
 public final class MusicOnlineHook implements IXposedHookLoadPackage {
 
-    private static final String PACKAGE = "com.xiaomi.music";
+    private static final String PACKAGE = "com.miui.player";
     private static final String TAG = "miu-iYellowPage-Music";
 
     private static void log(String message) {
