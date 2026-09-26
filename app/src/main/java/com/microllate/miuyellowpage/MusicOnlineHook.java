@@ -92,7 +92,14 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
                     classLoader
             );
 
+            // NCT remote-config/model gate.
             hookBooleanMethod(nctManager, "isNctOnlineOpen");
+
+            // Actual NCT online-mode gate used by SearchRepository and
+            // the online-song request chain. This gate also checks the
+            // ASM online-service setting, which is independent of
+            // isNctOnlineOpen().
+            hookBooleanMethod(nctManager, "checkIsOnlineMode");
 
         } catch (Throwable e) {
             log("NctManager hook failed: "
@@ -144,13 +151,13 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
             // General online-service availability.
             hookBooleanMethod(regionUtil, "p");
 
-            // ASM/EEA online-mode gate.
+            // ASM/EEA online-mode region gate.
             hookBooleanMethod(regionUtil, "i");
 
             // NCT/Singapore endpoint selection.
             hookSingaporeRegion(regionUtil);
 
-            // NCT online-service gate.
+            // NCT online-service gates.
             hookNctOnline(lpparam.classLoader);
 
             // Keep Music's request region consistent with an NCT-supported region.
