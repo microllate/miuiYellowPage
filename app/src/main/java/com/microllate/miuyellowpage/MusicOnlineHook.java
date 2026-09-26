@@ -18,6 +18,7 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
 
     private static final String PACKAGE = "com.miui.player";
     private static final String TAG = "miu-iYellowPage-Music";
+    private static final String NCT_REGION = "MY";
 
     private static void log(String message) {
         try {
@@ -91,12 +92,38 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
                     classLoader
             );
 
-            // The NCT implementation normally depends on remote/config state.
-            // Force the online-service gate open while keeping the Singapore endpoint.
             hookBooleanMethod(nctManager, "isNctOnlineOpen");
 
         } catch (Throwable e) {
             log("NctManager hook failed: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
+    private static void hookRegionCode(Class<?> clazz) {
+        try {
+            Method target = clazz.getDeclaredMethod("b");
+            target.setAccessible(true);
+
+            XposedBridge.hookMethod(target, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        return;
+                    }
+
+                    Object original = param.getResult();
+                    if (original instanceof String
+                            && !NCT_REGION.equalsIgnoreCase((String) original)) {
+                        param.setResult(NCT_REGION);
+                        log("RegionUtil.b(): " + original + " -> " + NCT_REGION);
+                    }
+                }
+            });
+
+            log("Music NCT region hook installed: RegionUtil.b() -> " + NCT_REGION);
+        } catch (Throwable e) {
+            log("RegionUtil.b() hook failed: "
                     + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
         }
     }
@@ -114,17 +141,21 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
                     lpparam.classLoader
             );
 
-            // p(): general online-service availability gate.
+            // General online-service availability.
             hookBooleanMethod(regionUtil, "p");
 
-            // i(): ASM/EEA online-mode region gate.
+            // ASM/EEA online-mode gate.
             hookBooleanMethod(regionUtil, "i");
 
-            // l(boolean): force NCT/Singapore endpoint selection.
+            // NCT/Singapore endpoint selection.
             hookSingaporeRegion(regionUtil);
 
             // NCT online-service gate.
             hookNctOnline(lpparam.classLoader);
+
+            // Keep Music's request region consistent with an NCT-supported region.
+            // The NCT backend remains the Singapore endpoint.
+            hookRegionCode(regionUtil);
 
         } catch (Throwable e) {
             log("Music online hook failed: "
