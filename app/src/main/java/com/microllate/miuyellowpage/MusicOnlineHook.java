@@ -26,6 +26,33 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
         }
     }
 
+    private static void hookBooleanMethod(Class<?> clazz, String methodName) {
+        try {
+            Method target = clazz.getDeclaredMethod(methodName);
+            target.setAccessible(true);
+
+            XposedBridge.hookMethod(target, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (param.hasThrowable()) {
+                        return;
+                    }
+
+                    Object original = param.getResult();
+                    if (!Boolean.TRUE.equals(original)) {
+                        param.setResult(true);
+                        log("RegionUtil." + methodName + "(): " + original + " -> true");
+                    }
+                }
+            });
+
+            log("Music online hook installed: RegionUtil." + methodName + "()");
+        } catch (Throwable e) {
+            log("RegionUtil." + methodName + "() hook failed: "
+                    + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
+        }
+    }
+
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) {
         if (!PACKAGE.equals(lpparam.packageName)) {
@@ -39,25 +66,12 @@ public final class MusicOnlineHook implements IXposedHookLoadPackage {
                     lpparam.classLoader
             );
 
-            Method target = regionUtil.getDeclaredMethod("p");
-            target.setAccessible(true);
+            // p(): general online-service availability gate.
+            hookBooleanMethod(regionUtil, "p");
 
-            XposedBridge.hookMethod(target, new XC_MethodHook() {
-                @Override
-                protected void afterHookedMethod(MethodHookParam param) {
-                    if (param.hasThrowable()) {
-                        return;
-                    }
+            // i(): ASM/EEA online-mode region gate.
+            hookBooleanMethod(regionUtil, "i");
 
-                    Object original = param.getResult();
-                    if (!Boolean.TRUE.equals(original)) {
-                        param.setResult(true);
-                        log("RegionUtil.p(): " + original + " -> true");
-                    }
-                }
-            });
-
-            log("Music online hook installed: RegionUtil.p()");
         } catch (Throwable e) {
             log("Music online hook failed: "
                     + e.getClass().getName() + ": " + String.valueOf(e.getMessage()));
