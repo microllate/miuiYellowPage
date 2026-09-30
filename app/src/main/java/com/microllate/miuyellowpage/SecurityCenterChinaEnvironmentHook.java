@@ -88,8 +88,10 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) {
                             try {
+                                ClassLoader cl = param.thisObject.getClass().getClassLoader();
+                                Class<?> build = Class.forName("miui.os.Build", false, cl);
                                 XposedHelpers.setStaticBooleanField(
-                                        miui.os.Build.class, "IS_INTERNATIONAL_BUILD", true);
+                                        build, "IS_INTERNATIONAL_BUILD", true);
                             } catch (Throwable e) {
                                 log("PrivacySafetyActivity EEA flag set failed: "
                                         + e.getClass().getSimpleName());
@@ -99,8 +101,10 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
                         @Override
                         protected void afterHookedMethod(MethodHookParam param) {
                             try {
+                                ClassLoader cl = param.thisObject.getClass().getClassLoader();
+                                Class<?> build = Class.forName("miui.os.Build", false, cl);
                                 XposedHelpers.setStaticBooleanField(
-                                        miui.os.Build.class, "IS_INTERNATIONAL_BUILD", false);
+                                        build, "IS_INTERNATIONAL_BUILD", false);
                             } catch (Throwable e) {
                                 log("PrivacySafetyActivity CN flag restore failed: "
                                         + e.getClass().getSimpleName());
