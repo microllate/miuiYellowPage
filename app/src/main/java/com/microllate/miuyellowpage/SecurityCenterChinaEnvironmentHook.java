@@ -20,6 +20,7 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
 
         try {
             hookMiuiBuild(lpparam.classLoader);
+            hookPrivacySafetyActivity(lpparam.classLoader);
             hookSystemProperties();
             hookDefaultLocale();
             hookYellowPageUtils(lpparam.classLoader);
@@ -70,6 +71,49 @@ public final class SecurityCenterChinaEnvironmentHook implements IXposedHookLoad
 
         } catch (Throwable e) {
             log("miui.os.Build hook failed: " + e.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Keep the SecurityCenter-wide CN environment, but let the EEA privacy
+     * protection Activity keep its original EEA page selection logic.
+     * The flag is restored immediately after onCreate returns.
+     */
+    private static void hookPrivacySafetyActivity(ClassLoader cl) {
+        try {
+            Class<?> activity = XposedHelpers.findClass(
+                    "com.miui.permcenter.privacycenter.PrivacySafetyActivity", cl);
+            XposedHelpers.findAndHookMethod(activity, "onCreate", android.os.Bundle.class,
+                    new XC_MethodHook() {
+                        @Override
+                        protected void beforeHookedMethod(MethodHookParam param) {
+                            try {
+                                ClassLoader cl = param.thisObject.getClass().getClassLoader();
+                                Class<?> build = Class.forName("miui.os.Build", false, cl);
+                                XposedHelpers.setStaticBooleanField(
+                                        build, "IS_INTERNATIONAL_BUILD", true);
+                            } catch (Throwable e) {
+                                log("PrivacySafetyActivity EEA flag set failed: "
+                                        + e.getClass().getSimpleName());
+                            }
+                        }
+
+                        @Override
+                        protected void afterHookedMethod(MethodHookParam param) {
+                            try {
+                                ClassLoader cl = param.thisObject.getClass().getClassLoader();
+                                Class<?> build = Class.forName("miui.os.Build", false, cl);
+                                XposedHelpers.setStaticBooleanField(
+                                        build, "IS_INTERNATIONAL_BUILD", false);
+                            } catch (Throwable e) {
+                                log("PrivacySafetyActivity CN flag restore failed: "
+                                        + e.getClass().getSimpleName());
+                            }
+                        }
+                    });
+            log("PrivacySafetyActivity EEA page compatibility: installed");
+        } catch (Throwable e) {
+            log("PrivacySafetyActivity hook failed: " + e.getClass().getSimpleName());
         }
     }
 
